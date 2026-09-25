@@ -319,3 +319,48 @@ def test_decoder_handles_degenerate_probabilities():
     assert decode.best_k([1e-9], lam=0.0)[0] == 0
     k, _ = decode.best_k([1.0, 0.999, 0.5], lam=0.5)
     assert k >= 1
+
+
+# --- Sprint 0 stopgap: blocking -> decoder adapter ---------------------------
+
+
+def test_raw_rrf_scores_would_decode_to_all_empty():
+    """Why rrf_to_marginals exists: rank 0 scores 1/60 and rank 1 scores 1/61,
+    so raw RRF values sit far below the decoder's 0.02 floor and every row
+    decodes to empty -- a submission scoring only the singleton rate."""
+    raw = {"S1-a": 1 / 60, "S1-b": 1 / 61}
+    assert decode.best_set(list(raw.values()), lam=0.0) == []
+
+
+def test_rrf_to_marginals_produces_a_usable_spread():
+    marg = decode.rrf_to_marginals({"S2-1": ["S1-a", "S1-b", "S1-c"]})
+    row = marg["S2-1"]
+    assert row["S1-a"] > row["S1-b"] > row["S1-c"]
+    assert row["S1-a"] > 0.5, "top candidate must clear the break-even"
+
+
+def test_pipeline_predictions_covers_every_s1_row():
+    """io_rules.md 5.1: a missing S1 row is a rejection, so an S1 that blocking
+    never proposed still has to appear."""
+    fused = {"S2-1": ["S1-a"], "S2-2": ["S1-b"]}
+    preds = decode.pipeline_predictions(fused, ["S1-a", "S1-b", "S1-never"])
+    assert set(preds) == {"S1-a", "S1-b", "S1-never"}
+    assert preds["S1-never"] == []
+
+
+def test_pipeline_predictions_respects_exclusivity():
+    """One fragment must not end up in two S1 rows' outputs."""
+    fused = {"S2-shared": ["S1-a", "S1-b"]}
+    preds = decode.pipeline_predictions(fused, ["S1-a", "S1-b"])
+    owners = [s1 for s1, frags in preds.items() if "S2-shared" in frags]
+    assert len(owners) <= 1
+
+
+def test_pipeline_accepts_real_marginals_when_available():
+    """The adapter is a placeholder; Owner C's calibrated scores pass straight
+    through the `marginals` argument."""
+    fused = {"S2-1": ["S1-a", "S1-b"]}
+    real = {"S2-1": {"S1-a": 0.97, "S1-b": 0.02}}
+    preds = decode.pipeline_predictions(fused, ["S1-a", "S1-b"], marginals=real)
+    assert preds["S1-a"] == ["S2-1"]
+    assert preds["S1-b"] == []

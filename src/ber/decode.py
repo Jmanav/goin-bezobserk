@@ -241,3 +241,52 @@ def decode_all(s1_marginals, lam_by_s1=None, lam_default=0.0, floor=PROB_FLOOR):
         lam = (lam_by_s1 or {}).get(s1_id, lam_default)
         predictions[s1_id] = decode_entity(ids, q, lam=lam, floor=floor)
     return predictions
+
+
+# --- Sprint 0 stopgap: blocking output -> decoder input ----------------------
+
+
+def rrf_to_marginals(fused, fused_scores=None, top_p=0.55, decay=0.55):
+    """Turn blocking's ranked candidate lists into pseudo-probabilities.
+
+    THIS IS A PLACEHOLDER. Owner C's calibrated LightGBM + cross-encoder output
+    replaces it, and nothing here is calibrated in any meaningful sense. It
+    exists so the pipeline can emit a format-valid submission before the scoring
+    model exists -- io_rules.md calls format mismatches the most common failure
+    mode, so proving the writer and validator end to end is worth doing early.
+
+    Raw RRF scores cannot be used directly: rank 0 scores 1/60 = 0.0167 and rank
+    1 scores 1/61 = 0.0164, so every candidate looks equally near-zero, the
+    decoder's floor rejects all of them, and every row decodes to empty. Instead
+    rank is mapped to a geometric decay: rank 0 -> top_p, then x decay per rank.
+
+    `top_p` is deliberately just above the 0.5 single-candidate break-even
+    (research.md 1.3 example A), so the top candidate is predicted and the rest
+    fall away quickly. That mirrors the measured cardinality only loosely --
+    mean t is 3.46 -- which is precisely why this is a stopgap.
+    """
+    out = {}
+    for frag_id, s1_ids in fused.items():
+        row = {}
+        for rank, s1_id in enumerate(s1_ids):
+            row[s1_id] = max(top_p * (decay ** rank), 1e-6)
+        out[frag_id] = row
+    return out
+
+
+def pipeline_predictions(fused, s1_ids, lam_null=1.0, lam_unseen=0.0,
+                         marginals=None, floor=PROB_FLOOR):
+    """Blocking output -> per-S1 predictions, via N2 exclusivity then N1 decode.
+
+    `marginals` accepts real calibrated scores as {fragment: {s1: p}} once Owner
+    C exists; without it the rrf_to_marginals placeholder is used. Returns
+    {s1_id: [fragment_ids]} covering every id in `s1_ids`, including the ones
+    blocking never proposed, since io_rules.md 5.1 makes a missing S1 row a
+    rejection.
+    """
+    scores = marginals if marginals is not None else rrf_to_marginals(fused)
+    pi = fragment_marginals(scores, lam_null=lam_null)
+    per_s1 = s1_candidate_marginals(pi)
+    decoded = decode_all(per_s1, lam_default=lam_unseen, floor=floor)
+    guarded = enforce_exclusivity(decoded, pi)
+    return {s1_id: sorted(guarded.get(s1_id, [])) for s1_id in s1_ids}

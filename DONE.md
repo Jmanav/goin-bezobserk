@@ -1,6 +1,9 @@
 # Progress log — Sprint 0
 
-Last updated 2026-09-25. **129 tests passing** (63 Owner A, 26 Owner B, 40 Owner D).
+Last updated 2026-09-25. **134 tests passing** (63 Owner A, 26 Owner B, 45 Owner D).
+
+**Gate 0 criteria 1 and 2 now PASS** — `scripts/run_pipeline.py` runs A→B→D end to
+end and emits a validator-clean submission. See §5.
 
 Records what is built, what the real data actually says, and what is still open.
 For the task breakdowns see `sprints/sprint-0/`; for the plan see `docs/`.
@@ -327,9 +330,23 @@ submission. Scorer reproduces a hand-computed F0.5 on a toy set exactly."*
 
 | # | Criterion | Owner | Status |
 |---|---|---|---|
-| 1 | End-to-end run on proxy data | D8 | **blocked** — needs Owner B blocking + Owner C scoring |
-| 2 | Validator-PASS submission | D4 | code done; unexercised end-to-end |
+| 1 | End-to-end run on proxy data | D8 | **PASS** — `scripts/run_pipeline.py` |
+| 2 | Validator-PASS submission | D4 | **PASS** — team validator clean, format verified byte-wise |
 | 3 | Scorer reproduces toy F0.5 exactly | D1 | **PASS** |
+
+**Gate 0 is met.** The pipeline emits `matching_results.tsv` and
+`candidate_pairs.tsv` in the io_rules.md §5.1 format: tab-separated, blank field
+for singletons, comma-separated with no spaces, exactly one row per S1.
+
+Scoring is a **placeholder** — Owner C does not exist, so `decode.rrf_to_marginals`
+maps blocking ranks to pseudo-probabilities. On the fixture that yields macro-F0.5
+**0.768** against a blocking ceiling of **0.999**. That gap is what Owner C's model
+is worth, and the 0.768 is a floor rather than a result.
+
+Raw RRF scores cannot be used directly: rank 0 scores 1/60 = 0.0167 and rank 1
+scores 1/61 = 0.0164, so every candidate sits below the decoder's 0.02 floor and
+every row would decode to empty — a submission scoring only the 5.58% singleton
+rate. A test pins this.
 
 ---
 

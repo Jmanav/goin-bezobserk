@@ -316,13 +316,20 @@ class KeyChannel:
 # --- B5: RRF fusion ---------------------------------------------------------
 
 
-def reciprocal_rank_fusion(channels, k=DEFAULT_K, rrf_k=RRF_K, always_keep=None):
+def reciprocal_rank_fusion(channels, k=DEFAULT_K, rrf_k=RRF_K, always_keep=None,
+                           fused_scores=None):
     """Fuse channel outputs by RRF (B5.1, B5.2).
 
         score = sum over channels of 1 / (rrf_k + rank)
 
     `always_keep` maps fragment -> ids that survive the top-K cut regardless
     (research.md 3.2: "plus all key hits with <= 5 collisions").
+
+    Pass a dict as `fused_scores` to receive the raw RRF score per kept
+    candidate. The scores are needed as an Owner C feature (research.md 3.3
+    lists the per-channel ranks) and by rrf_to_marginals; they are NOT
+    probabilities -- rank 0 scores 1/60 and rank 1 scores 1/61, so feeding them
+    straight to a decoder makes every candidate look equally near-zero.
     """
     fragments = set()
     for channel in channels:
@@ -343,6 +350,8 @@ def reciprocal_rank_fusion(channels, k=DEFAULT_K, rrf_k=RRF_K, always_keep=None)
             if s1_id not in kept:
                 kept.append(s1_id)
         fused[frag_id] = kept
+        if fused_scores is not None:
+            fused_scores[frag_id] = {s1: scores.get(s1, 0.0) for s1 in kept}
     return fused
 
 
