@@ -52,3 +52,5 @@ __all__ = [
     "normalise_record",
     "read_source",
 ]
+
+from . import decode, scorer, submission  # noqa: E402,F401

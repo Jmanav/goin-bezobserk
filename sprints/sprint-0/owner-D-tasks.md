@@ -63,9 +63,9 @@ invert the decoder's central assumption.
 
 This is Gate 0 criterion 3. Formula and singleton rule are exact — research.md §1.2, io_rules.md §6.
 
-- [ ] **D1.1 — Implement the per-entity formula exactly:** `F0.5 = 1.25·tp / (0.25·t + p)` for `t + p > 0`, **and `F0.5 = 1.0` when `t = p = 0`** (the singleton rule). Derived in research.md §1.2 from `F_β = (1+β²)·tp / ((1+β²)·tp + β²·fn + fp)` with β = 0.5.
-- [ ] **D1.2 — Macro-average over **all** S1 rows, singletons included** (io_rules.md §6, research.md §1.2: "Rows are macro-averaged, so a large cluster counts the same as a singleton").
-- [ ] **D1.3 — Encode research.md §1.2's consequence table as unit tests** — this **is** the hand-computed toy set for Gate 0 criterion 3. Every row must reproduce exactly:
+- [x] **D1.1 — Implement the per-entity formula exactly:** `F0.5 = 1.25·tp / (0.25·t + p)` for `t + p > 0`, **and `F0.5 = 1.0` when `t = p = 0`** (the singleton rule). Derived in research.md §1.2 from `F_β = (1+β²)·tp / ((1+β²)·tp + β²·fn + fp)` with β = 0.5.
+- [x] **D1.2 — Macro-average over **all** S1 rows, singletons included** (io_rules.md §6, research.md §1.2: "Rows are macro-averaged, so a large cluster counts the same as a singleton").
+- [x] **D1.3 — Encode research.md §1.2's consequence table as unit tests** — this **is** the hand-computed toy set for Gate 0 criterion 3. Every row must reproduce exactly:
 
   | True t | Prediction | tp | p | Expected F0.5 |
   |---|---|---|---|---|
@@ -81,8 +81,8 @@ This is Gate 0 criterion 3. Formula and singleton rule are exact — research.md
   | 4 | {1 correct} | 1 | 1 | 0.625 (1.25/2) |
   | 4 | {3 correct} | 3 | 3 | 0.9375 (3.75/4) |
 
-- [ ] **D1.4 — Slice-aware reporting** (research.md §8.2): country, vendor, `t ∈ {0, 1, 2–4, ≥ 5}`, chain vs non-chain, shared address, landmark-only, generic-name, non-ASCII. Also report **singleton accuracy** separately (research.md §8.1). Note research.md §1.2's "up to 0.40 of the score" was an illustrative guess; the measured singleton rate is **5.58%**, so the `t=2-4` (63%) and `t>=5` (26%) slices carry the score instead.
-- [ ] **D1.5 — Order-insensitive, trimmed comparison** (io_rules.md §5.3 `[VERIFY]`, D0.4) so the scorer matches the assumed grader behaviour.
+- [x] **D1.4 — Slice-aware reporting** (research.md §8.2): country, vendor, `t ∈ {0, 1, 2–4, ≥ 5}`, chain vs non-chain, shared address, landmark-only, generic-name, non-ASCII. Also report **singleton accuracy** separately (research.md §8.1). Note research.md §1.2's "up to 0.40 of the score" was an illustrative guess; the measured singleton rate is **5.58%**, so the `t=2-4` (63%) and `t>=5` (26%) slices carry the score instead.
+- [x] **D1.5 — Order-insensitive, trimmed comparison** (io_rules.md §5.3 `[VERIFY]`, D0.4) so the scorer matches the assumed grader behaviour.
 
 ## D2. Grouped CV split machinery
 
@@ -97,16 +97,16 @@ Owners B and C both consume these folds (B6.6, C6.2), so D owns them.
 
 io_rules.md §5 is the binding format spec. Build this **before** any modeling (io_rules.md §10 step 3).
 
-- [ ] **D3.1 — `matching_results.tsv` writer** (io_rules.md §5.1): columns `source1_entity_id<TAB>matched_entity_ids`; **exactly one row per Source-1 entity in the test set** (a missing S1 row ⇒ rejection); comma-separated list with **no quoting, no spaces** around commas; **blank field for singletons** (the S1 row still appears).
-- [ ] **D3.2 — Write safely, exactly as specified** (io_rules.md §5.3): `",".join(ids)` over a **deduped list**, then `to_csv(path, sep="\t", index=False, quoting=csv.QUOTE_NONE, escapechar="\\")`. Deterministic ordering, no trailing comma.
-- [ ] **D3.3 — `candidate_pairs.tsv` writer** (io_rules.md §5.2): same schema (`source1_entity_id`, `candidate_entity_ids`) and same formatting rules. Schema gated by D0.2. Consumes Owner B's **final** fused candidate set (B5.3).
-- [ ] **D3.4 — Both files land in `output/`** (io_rules.md §5).
+- [x] **D3.1 — `matching_results.tsv` writer** (io_rules.md §5.1): columns `source1_entity_id<TAB>matched_entity_ids`; **exactly one row per Source-1 entity in the test set** (a missing S1 row ⇒ rejection); comma-separated list with **no quoting, no spaces** around commas; **blank field for singletons** (the S1 row still appears).
+- [x] **D3.2 — Write safely, exactly as specified** (io_rules.md §5.3): `",".join(ids)` over a **deduped list**, then `to_csv(path, sep="\t", index=False, quoting=csv.QUOTE_NONE, escapechar="\\")`. Deterministic ordering, no trailing comma.
+- [x] **D3.3 — `candidate_pairs.tsv` writer** (io_rules.md §5.2): same schema (`source1_entity_id`, `candidate_entity_ids`) and same formatting rules. Schema gated by D0.2. Consumes Owner B's **final** fused candidate set (B5.3).
+- [x] **D3.4 — Both files land in `output/`** (io_rules.md §5).
 
 ## D4. Submission validator wrapper
 
 This is Gate 0 criterion 2. The organisers ship a stdlib-only helper — D wraps it (roadmap.md Sprint 0: "**submission validator wrapper**").
 
-- [ ] **D4.1 — Wrap the shipped validator** (io_rules.md §7), invoked as:
+- [x] **D4.1 — Wrap the shipped validator** (io_rules.md §7), invoked as:
   ```bash
   python3 utils/validate_submission.py \
     --matching  output/matching_results.tsv \
@@ -114,33 +114,33 @@ This is Gate 0 criterion 2. The organisers ship a stdlib-only helper — D wraps
     --test-dir  dataset/test
   ```
   It must print **PASS (exit 0)** before any upload. It checks **format only** — it does **not** compute the score (io_rules.md §7).
-- [ ] **D4.2 — Add the team's own pre-flight assertions** (research.md §9, io_rules.md §5 + §8): row count = `|S1_test|`; unique S1 IDs; no duplicate IDs within a list; all matched IDs exist in the S2/S3 **test** set; **only S2-/S3- IDs, no S1 self-matches**; empty string for no match; tab separator; header matches the sample.
-- [ ] **D4.3 — Assert matches ⊆ candidates** (io_rules.md §5.2, §8; research.md §9): every ID in `matching_results.tsv` must appear in `candidate_pairs.tsv` for that S1 row. A violation **signals a pipeline bug** — surface it loudly, not as a warning.
+- [x] **D4.2 — Add the team's own pre-flight assertions** (research.md §9, io_rules.md §5 + §8): row count = `|S1_test|`; unique S1 IDs; no duplicate IDs within a list; all matched IDs exist in the S2/S3 **test** set; **only S2-/S3- IDs, no S1 self-matches**; empty string for no match; tab separator; header matches the sample.
+- [x] **D4.3 — Assert matches ⊆ candidates** (io_rules.md §5.2, §8; research.md §9): every ID in `matching_results.tsv` must appear in `candidate_pairs.tsv` for that S1 row. A violation **signals a pipeline bug** — surface it loudly, not as a warning.
 - [ ] **D4.4 — Make validation non-bypassable in the submit path** (io_rules.md §7, roadmap.md § Leaderboard hygiene: "never spend a submission on a format error"). Wire this into the repo's `/submit` skill.
 
 ## D5. N2 — fragment exclusivity + NULL
 
 Ranked **#1** in the novelty stack: +1–3 estimated points, **low risk** (research.md §4). Pseudocode is given verbatim in research.md §3.4 — implement it, don't redesign it.
 
-- [ ] **D5.1 — Per-fragment odds and NULL weight** (research.md §3.4): for each fragment `r` in S2 ∪ S3 with candidates `C` and calibrated `p_rc` — `w_c = p_rc / (1 - p_rc)`; `w_null = 1.0 * lambda_null[regime]` (tuned on CV, the prior of a fragment being an orphan); `Z = w_null + Σ w_c`; `pi[r,c] = w_c / Z`; `pi[r,NULL] = w_null / Z`.
-- [ ] **D5.2 — Why no global solver** (research.md §3.4): with a deduplicated master the only hard cross-row constraint is "each fragment matches at most one S1", and that **decomposes per fragment**. Do not build a global optimiser.
+- [x] **D5.1 — Per-fragment odds and NULL weight** (research.md §3.4): for each fragment `r` in S2 ∪ S3 with candidates `C` and calibrated `p_rc` — `w_c = p_rc / (1 - p_rc)`; `w_null = 1.0 * lambda_null[regime]` (tuned on CV, the prior of a fragment being an orphan); `Z = w_null + Σ w_c`; `pi[r,c] = w_c / Z`; `pi[r,NULL] = w_null / Z`.
+- [x] **D5.2 — Why no global solver** (research.md §3.4): with a deduplicated master the only hard cross-row constraint is "each fragment matches at most one S1", and that **decomposes per fragment**. Do not build a global optimiser.
 - [ ] **D5.3 — Optional bipartite branch, OFF by default** (research.md §3.4, gated by D0.6/A0.3): if within-vendor 1:1 holds, then per vendor, per connected component of `(S1, frag_v)` edges with `pi > 0.05`, solve max-weight bipartite matching with NULL dummies via `scipy.optimize.linear_sum_assignment` on `-log-odds` (components are small); zero out `pi[r,c]` for unmatched pairs when `pi[r,c] < tau_keep`.
-- [ ] **D5.4 — Final guard** (research.md §3.4): if a fragment is selected by more than one S1 after decoding, keep `argmax pi`.
-- [ ] **D5.5 — Emit per-S1 candidate marginals** into the N1 decoder (research.md §3.4).
+- [x] **D5.4 — Final guard** (research.md §3.4): if a fragment is selected by more than one S1 after decoding, keep `argmax pi`.
+- [x] **D5.5 — Emit per-S1 candidate marginals** into the N1 decoder (research.md §3.4).
 - [ ] **D5.6 — CC-vs-exclusivity ablation harness** (research.md §4 rank 1 falsifiable ablation): connected components vs exclusivity on grouped CV; **count S1 pairs sharing a fragment**. This is the evidence that exclusivity beats CC (research.md §3.4: CC merges S1-a and S1-b whenever one fragment links to both).
 
 ## D6. N1 — exact expected-F0.5 decoder
 
 Ranked #4: +0.3–1.5 points, **medium risk (needs calibration)** (research.md §4). Pseudocode verbatim in research.md §3.5.
 
-- [ ] **D6.1 — Poisson-binomial DP** (research.md §3.5): `P_in = poisson_binomial_pmf(q[:k])` via **O(k²) DP**; `P_out = convolve(poisson_binomial_pmf(q[k:]), poisson_pmf(lam, max=m))`.
-- [ ] **D6.2 — The `k == 0` branch is the singleton rule:** `return P_out[0]` — F = 1 iff T = 0 (research.md §3.5). Get this exactly right; it is where the free 1.0 on true singletons comes from.
-- [ ] **D6.3 — The expectation loop** (research.md §3.5): skip `a == 0` (F = 0 when tp = 0 and p = k > 0); otherwise accumulate `pa*pb * 1.25*a / (0.25*(a+b) + k)`.
-- [ ] **D6.4 — `best_k = argmax_{k in 0..m}`, top-k optimal under independence** (research.md §3.5). Inputs: marginals `q_1..q_m` from N2, sorted desc, with `q_i >= floor = 0.02`.
-- [ ] **D6.5 — Empty set is the default** (research.md §0, §3.5; io_rules.md §6: "When in doubt, don't merge. Empty is the safe default").
+- [x] **D6.1 — Poisson-binomial DP** (research.md §3.5): `P_in = poisson_binomial_pmf(q[:k])` via **O(k²) DP**; `P_out = convolve(poisson_binomial_pmf(q[k:]), poisson_pmf(lam, max=m))`.
+- [x] **D6.2 — The `k == 0` branch is the singleton rule:** `return P_out[0]` — F = 1 iff T = 0 (research.md §3.5). Get this exactly right; it is where the free 1.0 on true singletons comes from.
+- [x] **D6.3 — The expectation loop** (research.md §3.5): skip `a == 0` (F = 0 when tp = 0 and p = k > 0); otherwise accumulate `pa*pb * 1.25*a / (0.25*(a+b) + k)`.
+- [x] **D6.4 — `best_k = argmax_{k in 0..m}`, top-k optimal under independence** (research.md §3.5). Inputs: marginals `q_1..q_m` from N2, sorted desc, with `q_i >= floor = 0.02`.
+- [x] **D6.5 — Empty set is the default** (research.md §0, §3.5; io_rules.md §6: "When in doubt, don't merge. Empty is the safe default").
 - [ ] **D6.6 — Unseen-mass λ estimation** (research.md §3.5): estimate from out-of-fold data as `E[#true matches not in C]` per stratum (country × vendor × name-rarity bucket). For France, use the **pooled estimate inflated by the PC drop observed in leave-one-country-out**.
-- [ ] **D6.7 — Performance:** `m ≤ 10` after the floor ⇒ ~10³ ops per S1; at 1–3M S1 rows that is **seconds in numba or vectorised numpy** (research.md §3.5; §6 budgets decode at < 5 min CPU). Exact DP beats Monte-Carlo here — use MC only if modelling correlated labels.
-- [ ] **D6.8 — Verify the decoder against research.md §1.3's worked examples** as unit tests:
+- [x] **D6.7 — Performance:** `m ≤ 10` after the floor ⇒ ~10³ ops per S1; at 1–3M S1 rows that is **seconds in numba or vectorised numpy** (research.md §3.5; §6 budgets decode at < 5 min CPU). Exact DP beats Monte-Carlo here — use MC only if modelling correlated labels.
+- [x] **D6.8 — Verify the decoder against research.md §1.3's worked examples** as unit tests:
   - **A (single candidate):** π = 0.6 → predict {x} (0.6 > 0.4); π = 0.4 → predict {}. **Break-even is exactly 0.5.**
   - **B (two candidates):** π₁ = 0.9, π₂ = 0.5 → {} = 0.05, {1} = **0.825**, {1,2} = 0.728 ⇒ the second candidate at 0.5 is **rejected**. Confirms the effective threshold for adding a second match is above 0.5 — "the precision tilt that a single global threshold cannot express."
 - [ ] **D6.9 — EUM robustness hedge** (research.md §3.5, §4 rank 4, per Ye et al. 2012): also fit per-regime thresholds tuned directly on out-of-fold macro-F0.5. Pick whichever wins on grouped CV **and** leave-one-country-out. Scaffold now; the bake-off is Gate 2 (roadmap.md § Sprint 2).
