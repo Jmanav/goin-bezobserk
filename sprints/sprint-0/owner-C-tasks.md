@@ -24,42 +24,42 @@ Target: LightGBM on **~80 engineered features** (research.md §0, §3.3).
 
 All from research.md §3.3 "Stage A, LightGBM" feature list. Consume Owner A's normaliser contract (A2.1): `name_norm`, `name_core`, `addr_norm`, `name_tokens`, `addr_numbers`, `postcode`, `landmark_flag`, `script_flag`, folded ASCII variant.
 
-- [ ] **C1.1 — RapidFuzz metrics (MIT, research.md §9)** on `name_norm`, `name_core` **and** `addr_norm` (research.md §3.3): `ratio`, `partial_ratio`, `token_set_ratio`, `token_sort_ratio`, Jaro-Winkler, Levenshtein-normalised.
+- [x] **C1.1 — RapidFuzz metrics (MIT, research.md §9)** on `name_norm`, `name_core` **and** `addr_norm` (research.md §3.3): `ratio`, `partial_ratio`, `token_set_ratio`, `token_sort_ratio`, Jaro-Winkler, Levenshtein-normalised.
 - [ ] **C1.2 — Use `process.cpdist` for bulk computation** (research.md §6): budget 30–90 min on 32 vCPU for ~150M pairs (K=25 × 6M). **Stream in chunks** — research.md §6 and §5 "Runtime blow-ups".
-- [ ] **C1.3 — Channel-score features** (research.md §3.3): char-n-gram TF-IDF cosine, dense cosine, BM25 score, **and the ranks from each channel** — consumed from Owner B's per-channel score+rank output (B1.4, B2.3, B3.4).
+- [x] **C1.3 — Channel-score features** (research.md §3.3): char-n-gram TF-IDF cosine, dense cosine, BM25 score, **and the ranks from each channel** — consumed from Owner B's per-channel score+rank output (B1.4, B2.3, B3.4).
 
 ## C2. Feature library — IDF / rarity
 
-- [ ] **C2.1 — IDF-weighted token Jaccard** (research.md §3.3), using Owner A's S1 token IDF (A2.3).
-- [ ] **C2.2 — Sum of IDF of shared vs unshared tokens** (research.md §3.3).
-- [ ] **C2.3 — Rarest shared token's IDF** (research.md §3.3) — the Fellegi–Sunter / Splink-style TF adjustment **expressed as a feature**. Per research.md §2.4, Splink's TF-adjusted log-likelihood ideas are used as *features*, **not as the matcher**.
+- [x] **C2.1 — IDF-weighted token Jaccard** (research.md §3.3), using Owner A's S1 token IDF (A2.3).
+- [x] **C2.2 — Sum of IDF of shared vs unshared tokens** (research.md §3.3).
+- [x] **C2.3 — Rarest shared token's IDF** (research.md §3.3) — the Fellegi–Sunter / Splink-style TF adjustment **expressed as a feature**. Per research.md §2.4, Splink's TF-adjusted log-likelihood ideas are used as *features*, **not as the matcher**.
 
 ## C3. Feature library — number / unit / distinguishing tokens
 
 Research.md §3.3 "Distinguishing-token features". Ditto (research.md §2.4) is direct evidence that **explicit number tokens matter for business addresses**.
 
-- [ ] **C3.1 — Numbers in name:** `"#2"`, `"Unit 5"` (research.md §3.3).
-- [ ] **C3.2 — House numbers equal / different / missing** (research.md §3.3) — three-state, not a boolean; "missing" is distinct from "different" (io_rules.md §4).
-- [ ] **C3.3 — Unit mismatch** (research.md §3.3) — targets the "Suite 200 vs 210" edge case (research.md §5 "Numeric/unit mismatch": tokenisers split digits, so compare the **parsed** unit/house fields exactly).
-- [ ] **C3.4 — Postcode equal / prefix / different** (research.md §3.3).
-- [ ] **C3.5 — Branch words:** `"north"`, `"airport"`, `"mall"` (research.md §3.3) — targets chains/franchises (research.md §5).
-- [ ] **C3.6 — Legal-suffix agreement or conflict** (research.md §3.3, §3.1) — consumes Owner A's suffix feature (A3.2), which is a **conflict signal, not a deletion**.
-- [ ] **C3.7 — Acronym match:** initials of one name equal a token of the other (research.md §3.3) — targets "IBM vs International Business Machines" (research.md §5).
+- [x] **C3.1 — Numbers in name:** `"#2"`, `"Unit 5"` (research.md §3.3).
+- [x] **C3.2 — House numbers equal / different / missing** (research.md §3.3) — three-state, not a boolean; "missing" is distinct from "different" (io_rules.md §4).
+- [x] **C3.3 — Unit mismatch** (research.md §3.3) — targets the "Suite 200 vs 210" edge case (research.md §5 "Numeric/unit mismatch": tokenisers split digits, so compare the **parsed** unit/house fields exactly).
+- [x] **C3.4 — Postcode equal / prefix / different** (research.md §3.3).
+- [x] **C3.5 — Branch words:** `"north"`, `"airport"`, `"mall"` (research.md §3.3) — targets chains/franchises (research.md §5).
+- [x] **C3.6 — Legal-suffix agreement or conflict** (research.md §3.3, §3.1) — consumes Owner A's suffix feature (A3.2), which is a **conflict signal, not a deletion**.
+- [x] **C3.7 — Acronym match:** initials of one name equal a token of the other (research.md §3.3) — targets "IBM vs International Business Machines" (research.md §5).
 
 ## C4. Feature library — listwise / competition features
 
 Research.md §3.3 "Competition features (listwise)". Ranked #3 in the novelty stack at **+0.5–2 estimated points**, low risk (research.md §4): the model sees "is there a better S1 for this fragment?"
 
-- [ ] **C4.1 — Candidate rank among this fragment's S1 candidates** (research.md §3.3).
-- [ ] **C4.2 — Score gap to the best other S1** (research.md §3.3).
-- [ ] **C4.3 — Number of S1s sharing the same address** (research.md §3.3) — the shared-address/mall mitigation (research.md §5).
-- [ ] **C4.4 — Number of S1s sharing the same `name_core`** (research.md §3.3) — the **chain indicator** (research.md §5 chains/franchises).
+- [x] **C4.1 — Candidate rank among this fragment's S1 candidates** (research.md §3.3).
+- [x] **C4.2 — Score gap to the best other S1** (research.md §3.3).
+- [x] **C4.3 — Number of S1s sharing the same address** (research.md §3.3) — the shared-address/mall mitigation (research.md §5).
+- [x] **C4.4 — Number of S1s sharing the same `name_core`** (research.md §3.3) — the **chain indicator** (research.md §5 chains/franchises).
 - [ ] **C4.5 — Cross-vendor triangle support** (research.md §3.3): best score to any fragment from the *other* vendor that itself strongly matches this S1. **Feature only** — research.md §3.4: "S2↔S3 fragment similarity is used only as a *feature* (triangle support), never as a transitive link."
 
 ## C5. Feature library — categoricals
 
-- [ ] **C5.1 — Vendor ID (S2/S3) as categorical** (research.md §3.3, §3.7). Per research.md §3.7, start with vendor as a categorical feature + per-vendor calibration — cheap, captures most of the gain.
-- [ ] **C5.2 — Country as categorical with an explicit `"other/unseen"` bucket** (research.md §3.3, §5; io_rules.md §3). Hard rule: country **must not be the only split path**. No one-hot to `{US, India}`.
+- [x] **C5.1 — Vendor ID (S2/S3) as categorical** (research.md §3.3, §3.7). Per research.md §3.7, start with vendor as a categorical feature + per-vendor calibration — cheap, captures most of the gain.
+- [x] **C5.2 — Country as categorical with an explicit `"other/unseen"` bucket** (research.md §3.3, §5; io_rules.md §3). Hard rule: country **must not be the only split path**. No one-hot to `{US, India}`.
 - [ ] **C5.3 — Per-vendor noise statistics as features** (research.md §3.7): field missingness, abbreviation rate, address length. Owner A produces the stats in Sprint 1; C defines the feature slots now.
 - [ ] **C5.4 — Feature registry / manifest.** ~80 features (research.md §3.3) across C1–C5 need names, dtypes and an ablation switch each — research.md §8.1 runs a drop-feature ablation ladder, and §4 rank 3 requires a listwise drop-feature ablation.
 
@@ -67,8 +67,8 @@ Research.md §3.3 "Competition features (listwise)". Ranked #3 in the novelty st
 
 Start params are exact — research.md §3.3.
 
-- [ ] **C6.1 — Start params:** `num_leaves = 255`, `learning_rate = 0.05`, `min_data_in_leaf = 100`, `feature_fraction = 0.7`, early stopping on grouped CV (research.md §3.3). Note: Foursquare 7th place found **much larger trees helped at 1.5M-row scale** (`num_leaves = 2^12`, lr 0.1, ~2,000 iterations, validation AUC still rising) — so **tune upward** (research.md §2.1, §3.3).
-- [ ] **C6.2 — OOF wiring on grouped CV:** `GroupKFold(5)`, groups = S1 entity ∪ its fragments, **blocked additionally by postcode or city** so neighbouring lookalikes stay in the same fold (research.md §8.3a; §5 "CV leakage" — compare random vs grouped CV gap). Fold definitions come from Owner D.
+- [x] **C6.1 — Start params:** `num_leaves = 255`, `learning_rate = 0.05`, `min_data_in_leaf = 100`, `feature_fraction = 0.7`, early stopping on grouped CV (research.md §3.3). Note: Foursquare 7th place found **much larger trees helped at 1.5M-row scale** (`num_leaves = 2^12`, lr 0.1, ~2,000 iterations, validation AUC still rising) — so **tune upward** (research.md §2.1, §3.3).
+- [x] **C6.2 — OOF wiring on grouped CV:** `GroupKFold(5)`, groups = S1 entity ∪ its fragments, **blocked additionally by postcode or city** so neighbouring lookalikes stay in the same fold (research.md §8.3a; §5 "CV leakage" — compare random vs grouped CV gap). Fold definitions come from Owner D.
 - [ ] **C6.3 — Negatives come from the real blocking output** (research.md §3.6): "every non-matching candidate from the *same* blocking pipeline, so the training distribution equals the inference distribution. **This is the most common silent bug.**" Also io_rules.md §8. Wire the trainer to consume Owner B's candidate set directly.
 - [ ] **C6.4 — FP-weighted training hook** (research.md §2.1, §2.5): Foursquare 7th place weighted samples by the loss a mistake would cause, because false positives hurt more than true negatives help. Average weights ~0.8 positives / ~1.0 negatives. Under macro F0.5 the asymmetry is harsher still (io_rules.md §6).
 - [ ] **C6.5 — Chunked, memory-aware inference** (research.md §2.1 "Adopt", §6): 10,000-row chunks; budget 1–3 h train, 30–60 GB.

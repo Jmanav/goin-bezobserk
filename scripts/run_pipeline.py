@@ -26,8 +26,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from ber.normalise import normalise_record  # noqa: E402
 from ber import (blocking, blocking_report, decode, dense,  # noqa: E402
-                 run_audit, scorer, submission)
+                 features as featlib, matcher, run_audit, scorer, submission)
 
 DATA_ROOT = os.environ.get(
     "BER_DATA_ROOT",
@@ -41,6 +42,7 @@ USE_DENSE = os.environ.get("BER_USE_DENSE", "1") == "1"
 MODEL_KEY = os.environ.get("BER_MODEL", "multilingual-e5-small")
 OUT_DIR = Path(os.environ.get("BER_OUT", "output"))
 LAM_NULL = float(os.environ.get("BER_LAM_NULL", "1.0"))
+TRAIN_MODEL = os.environ.get("BER_TRAIN_MODEL", "1") == "1"
 SEED = 42
 
 
@@ -104,9 +106,48 @@ def main():
     block_s = time.time() - t0
     print(f"  blocking: {block_s:.1f}s")
 
+    # --- score (Owner C) ----------------------------------------------------
+    # Without a trained model the decoder falls back to decode.rrf_to_marginals,
+    # which is a rank heuristic, not a scorer. Training needs ground truth, so
+    # this path is available on train and skipped on test.
+    marginals = None
+    if truth and TRAIN_MODEL:
+        t0 = time.time()
+        fs = {}
+        blocking.reciprocal_rank_fusion(channels, k=K, always_keep=always,
+                                        fused_scores=fs)
+        s1_recs = {r.entity_id: normalise_record(r.business_name,
+                                                 r.business_address, r.country)
+                   for r in s1.itertuples(index=False)}
+        fr_recs = {r.entity_id: normalise_record(r.business_name,
+                                                 r.business_address, r.country)
+                   for r in frags.itertuples(index=False)}
+        idf = featlib.token_idf([r.name_tokens for r in s1_recs.values()])
+        ncc, adc = featlib.corpus_counts(s1_recs)
+
+        X, y, groups = matcher.build_training_pairs(
+            fused, fs, fr_recs, s1_recs, truth, idf, ncc, adc)
+        if len(X) and len(set(y)) > 1:
+            # Hold out by fragment so a fragment's candidates never straddle the
+            # split (research.md 8.3a: group by entity, not by row).
+            uniq = sorted(set(groups))
+            train_frags = set(uniq[:int(len(uniq) * 0.7)])
+            tr = [i for i, g in enumerate(groups) if g in train_frags]
+            model = matcher.PairScorer().fit(X[tr], y[tr])
+            marginals = matcher.score_candidates(
+                model, fused, fs, fr_recs, s1_recs, idf, ncc, adc)
+            print(f"  scoring: {time.time()-t0:.1f}s  backend={model.backend} "
+                  f"pairs={len(X):,} positives={int(y.sum()):,}")
+            imp = model.feature_importance(8)
+            if imp:
+                print("  top features:", ", ".join(imp))
+        else:
+            print("  scoring: skipped (insufficient labelled pairs)")
+
     # --- decode -------------------------------------------------------------
     t0 = time.time()
-    predictions = decode.pipeline_predictions(fused, s1_ids, lam_null=LAM_NULL)
+    predictions = decode.pipeline_predictions(fused, s1_ids, lam_null=LAM_NULL,
+                                              marginals=marginals)
     decode_s = time.time() - t0
     n_pred = sum(len(v) for v in predictions.values())
     print(f"  decode: {decode_s:.1f}s  predicted ids={n_pred:,}")
@@ -146,7 +187,8 @@ def main():
                    for r in s1.itertuples(index=False)}
         rep = scorer.macro_f_beta(truth, predictions, slices={
             "t": scorer.cardinality_slice(truth), "country": country})
-        show("local macro-F0.5 (PLACEHOLDER SCORING -- no Owner C model)",
+        label = ("Owner C model" if marginals else "PLACEHOLDER rank heuristic")
+        show(f"local macro-F0.5 ({label})",
              rep.to_dict())
         ceiling = blocking_report.entity_recall_ceiling(candidates_by_s1, truth)
         show("blocking ceiling for comparison", ceiling)
