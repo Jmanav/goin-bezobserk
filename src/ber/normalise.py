@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 from dataclasses import dataclass, field
 
 from .rules import (
@@ -118,6 +119,13 @@ def normalise_name(raw):
 # letter they attach to and must survive punctuation stripping.
 _COMBINING_CATEGORIES = frozenset({"Mn", "Mc"})
 
+# Zero-width formatting characters (category Cf): ZWNJ, ZWJ, ZWSP, BOM. They are
+# invisible but not whitespace, so blanking them to a space SPLITS a word --
+# observed in Telugu names from the real test data, where one spelling of a name
+# became two tokens and stopped matching the other. They carry no matching
+# signal, so they are deleted outright rather than replaced.
+_ZERO_WIDTH = frozenset("​‌‍﻿⁠­")
+
 
 def _strip_non_alnum_accent_safe(text):
     """Drop punctuation while keeping letters (accented or Indic) and digits.
@@ -130,6 +138,8 @@ def _strip_non_alnum_accent_safe(text):
     """
     out = []
     for ch in text:
+        if ch in _ZERO_WIDTH:
+            continue          # delete, never blank: a space would split the word
         if (
             ch.isalnum()
             or ch.isspace()
@@ -157,11 +167,13 @@ def find_legal_suffixes(name_norm):
     relying on deletion (research.md 3.1: store suffixes as a *feature*).
     """
     found = set()
-    padded = f" {name_norm} "
     for suffix in ALL_LEGAL_SUFFIXES:
-        needle = f" {suffix} ".replace(".", " ")
-        needle = _WS.sub(" ", needle)
-        if needle in padded:
+        # Same matcher as strip_legal_suffixes, so detection and stripping can
+        # never disagree. A plain substring test with literal spaces missed
+        # "Private-Limited", which real vendor rows write as often as the
+        # spaced form -- detection returned nothing, so the stripper (which is
+        # handed only what was detected) never saw it either.
+        if re.search(_suffix_pattern(suffix), name_norm):
             found.add(suffix)
     return found
 
@@ -190,13 +202,24 @@ def strip_legal_suffixes(name_norm, suffixes=None):
 
     candidates = ALL_LEGAL_SUFFIXES if suffixes is None else suffixes
     for suffix in sorted(candidates, key=lambda s: (-len(s.split()), -len(s))):
-        stripped = re.sub(
-            rf"(?:^|\s){re.escape(suffix)}(?=\s|$)", " ", text
-        )
+        stripped = re.sub(_suffix_pattern(suffix), " ", text)
         stripped = _WS.sub(" ", stripped).strip()
         if stripped:
             text = stripped
     return _WS.sub(" ", text).strip()
+
+
+@lru_cache(maxsize=512)
+def _suffix_pattern(suffix):
+    """Match a suffix whose words may be separated by spaces or hyphens.
+
+    Real vendor data writes "Private-Limited" as often as "Private Limited", and
+    the hyphen survives normalisation because it is meaningful elsewhere in
+    addresses. Requiring a literal space missed those rows entirely.
+    """
+    parts = [re.escape(word) for word in suffix.split()]
+    body = r"[\s\-]+".join(parts)
+    return rf"(?:^|[\s\-]){body}(?=[\s\-]|$)"
 
 
 def apply_transliteration_variants(tokens):

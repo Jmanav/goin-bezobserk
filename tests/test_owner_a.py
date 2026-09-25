@@ -472,3 +472,58 @@ def test_latin_names_are_unaffected_by_the_indic_fix():
     assert normalise.normalise_name("Soci\u00e9t\u00e9 G\u00e9n\u00e9rale SA") == "soci\u00e9t\u00e9 g\u00e9n\u00e9rale sa"
     r = normalise.normalise_record("Gangapur Foods Ventures Pvt Ltd", "Nashik", "India")
     assert r.name_core == "gangapur foods ventures"
+
+
+# --- vendor noise seen in the real test split -------------------------------
+
+
+def test_hyphenated_legal_suffix_is_stripped():
+    """Real vendor rows write "Private-Limited" as often as "Private Limited".
+    Detection used a substring test with literal spaces and missed the
+    hyphenated form, and since the stripper is handed only what detection
+    found, name_core kept the suffix."""
+    r = normalise.normalise_record(
+        "Tirupati (Rural) Ensemble Private-Limited", "Tirupati", "India")
+    assert r.name_core == "tirupati rural ensemble"
+    assert "private limited" in r.legal_suffixes
+
+
+def test_suffix_detection_and_stripping_agree():
+    """find_legal_suffixes and strip_legal_suffixes must use the same matcher."""
+    for raw in (
+        "Acme Hardware Pvt-Ltd",
+        "Acme Hardware Pvt Ltd",
+        "REAL (INDIA) WEALTH PRIVATE LIMITED",
+        "ank chits private limited",
+    ):
+        norm = normalise.normalise_name(raw)
+        found = normalise.find_legal_suffixes(norm)
+        core = normalise.strip_legal_suffixes(norm, found)
+        assert found, f"no suffix detected in {raw!r}"
+        for suffix in found:
+            assert suffix not in core, f"{suffix!r} survived in {core!r}"
+
+
+def test_zero_width_characters_are_deleted_not_blanked():
+    """U+200C and friends are category Cf: invisible but not whitespace. Blanking
+    them to a space SPLITS a word -- seen in Telugu names in the real test data,
+    where one spelling became two tokens and stopped matching the other."""
+    zwnj = "\u200c"
+    with_zw = "\u0c0e\u0c15\u0c4d\u0c38\u0c4d" + zwnj + "\u0c2a\u0c4b"
+    without = "\u0c0e\u0c15\u0c4d\u0c38\u0c4d\u0c2a\u0c4b"
+    assert normalise.normalise_name(with_zw) == normalise.normalise_name(without)
+    assert zwnj not in normalise.normalise_name(with_zw)
+
+
+def test_zero_width_variants_all_normalise_away():
+    base = "acme"
+    for zw in ("\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"):
+        assert normalise.normalise_name(f"ac{zw}me") == base
+
+
+def test_france_is_the_literal_label_seen_in_test_data():
+    """A0.5 resolved: the test split carries exactly france/india/us."""
+    assert normalise.normalise_country("France") == "france"
+    assert normalise.normalise_country(" FRANCE ") == "france"
+    # never mapped to a closed set
+    assert normalise.normalise_country("Atlantis") == "atlantis"

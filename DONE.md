@@ -1,6 +1,6 @@
 # Progress log — Sprint 0
 
-Last updated 2026-09-25. Head: `1db10e6`. **98 tests passing** (58 Owner A, 40 Owner D).
+Last updated 2026-09-25. **103 tests passing** (63 Owner A, 40 Owner D).
 
 Records what is built, what the real data actually says, and what is still open.
 For the task breakdowns see `sprints/sprint-0/`; for the plan see `docs/`.
@@ -67,10 +67,29 @@ Bengali. Two distinct patterns:
 governs Sprint 1 is candidate-pair volume, K × ~10M test fragments. At K=25 that
 is 250M pairs against §6's assumed 150M, on $200 of credits.
 
-### 1.4 Country labels
+### 1.4 Country labels — A0.5 RESOLVED
 
-Train carries exactly `US` and `India`. France is absent, as §1.4 predicted.
-**France's exact test spelling is still unconfirmed** — see "what to run".
+Both splits carry exactly three casefolded labels. The test split adds France:
+
+| split | labels |
+|---|---|
+| train | `us`, `india` |
+| test | `us`, `india`, **`france`** |
+
+France is literally `"France"` — no `FR`, no `USA`, no `United States`, and no
+missing or empty values in the scanned window. `normalise_country` (casefold,
+keep the label) already handles this; no code change was needed.
+
+**France is 287,023 of 2M scanned test fragment rows (~14%)** — a substantial
+slice, not a token presence. Every country-keyed path needs a working France
+branch.
+
+Non-Latin rates hold across the split, so there is no train→test script shift:
+
+| | train | test |
+|---|---|---|
+| S2 India non-Latin | 41.3% | 41.7% |
+| S3 India non-Latin | 32.4% | 32.9% |
 
 ### 1.5 Ground-truth file shape — resolves Q7
 
@@ -118,7 +137,28 @@ where the exact answer was k=2. Caught only by diffing the fast path against
 exact recomputation. Replaced with suffix PMFs built by a stable backward scan,
 verified over 8000 random cases at max deviation 4.4e-16.
 
-### 2.4 Earlier, smaller fixes
+### 2.4 Vendor noise in legal suffixes
+
+The real test data writes legal suffixes inconsistently: `Private-Limited`
+(hyphenated), `(LIMITED)` (parenthesised), `PRIVATE-PRIVATE` (duplicated),
+`SERVICESPRIVATE` (no space). Suffix *detection* used a substring test with
+literal spaces, and since the stripper is handed only what detection found, the
+hyphenated form survived into `name_core` entirely. Detection and stripping now
+share one matcher that accepts spaces or hyphens between suffix words.
+
+`SERVICESPRIVATE LIMITED` and a bare `[Private]` remain unhandled and should
+stay that way — the first has no token boundary to match on, and the second is
+not a legal suffix on its own.
+
+### 2.5 Zero-width characters split words
+
+Telugu names in the test data contain U+200C ZERO WIDTH NON-JOINER. It is
+category `Cf` — invisible but *not* whitespace — so the punctuation filter
+replaced it with a space and **split one word into two**. Two spellings of the
+same name became different tokens and stopped matching. Zero-width characters
+(ZWNJ, ZWJ, ZWSP, BOM, word-joiner, soft hyphen) are now deleted outright.
+
+### 2.6 Earlier, smaller fixes
 
 - Accented Latin was stripped as punctuation (`Société` → `soci t`) — the exact
   France failure io_rules.md §3 warns about.
@@ -174,14 +214,14 @@ affects decode time**.
 | A0.2 / Q3 | Fragment → ≤1 S1? | Holds on proxy; re-confirm on real train |
 | A0.3 / Q4 | Within-vendor 1:1? | **Does not hold** → D5.3 bipartite branch stays OFF |
 | A0.4 / Q5 | Singleton & orphan rates | **5.58% singleton**, mean t=3.46 |
-| A0.6 | Non-Latin census | **41%/32% of India rows**, 6+ scripts |
+| A0.5 | Exact country strings | **RESOLVED: `us`, `india`, `france`.** France is literally "France" and is ~14% of test fragments |
+| A0.6 | Non-Latin census | **41%/32% of India rows**, 6+ scripts. Holds on test (41.7%/32.9%) |
 | Q7 | `candidate_pairs.tsv` schema | **io_rules.md §5.2 list shape**, confirmed by the organiser's own file |
 
 ### Still open
 
 | # | Question | Blocking what |
 |---|---|---|
-| A0.5 | France's exact country string | Country-open-set handling |
 | Q8 | Can test text be used unsupervised (DAPT)? | Owner C |
 | Q10 | Public LB fraction / submission limit | Leaderboard hygiene |
 | Q11 | Scorer whitespace / ordering | Assumed order-insensitive, trimmed |
@@ -210,6 +250,5 @@ submission. Scorer reproduces a hand-computed F0.5 on a toy set exactly."*
 - **`metaphone` install is unverified in Colab.** The notebook cell uses
   `check=False`, so failure is silent and the built-in fallback is used. If
   `phonetic_key` matters for Owner B's key channel, confirm rather than assume.
-- **Test-split audit has not been run.** All findings above are train-only.
 - **No end-to-end run exists yet**, so the writer and validator have never been
   exercised against a real pipeline output.
