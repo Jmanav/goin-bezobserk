@@ -426,3 +426,49 @@ def test_cardinality_buckets_match_research_slices():
     report = audit.cardinality_report(truth)
     assert report["buckets"] == {"t=0": 1, "t=1": 1, "t=2-4": 1, "t>=5": 1}
     assert report["singleton_rate"] == 0.25
+
+
+# --- Indic script handling (A0.6 resolved: 41% S2 / 32% S3 India non-Latin) --
+
+
+def test_indic_combining_marks_are_never_stripped_as_punctuation():
+    """Regression: Indic vowel signs and virama are categories Mn/Mc, for which
+    str.isalnum() is False. Testing isalnum alone blanked every one of them and
+    shattered a Malayalam name down to its first character."""
+    raw = "\u0d21\u0d4d\u0d30\u0d40\u0d02 \u0d2e\u0d40\u0d21\u0d3f\u0d2f"
+    out = normalise.normalise_name(raw)
+    assert out == raw.casefold(), out
+    assert len(out) > 5, f"Indic text collapsed to {out!r}"
+
+
+def test_indic_scripts_survive_normalisation():
+    for raw in (
+        "\u092e\u0949\u0921\u0930\u094d\u0928 \u091f\u0947\u0915\u094d\u0928\u094b\u0932\u0949\u091c\u0940\u091c",
+        "\u0b9a\u0bbf\u0b9f\u0bcd\u0b9f\u0bbf \u0b85\u0b95\u0bcd\u0bb0\u0bcb",
+        "\u0987\u09a8\u09cd\u09a6\u09cb",
+        "\u0ab8\u0abf\u0a9f\u0ac0",
+    ):
+        out = normalise.normalise_name(raw)
+        assert len(out) >= len(raw) - 2, f"{raw!r} collapsed to {out!r}"
+
+
+def test_transliterated_legal_suffix_is_stripped():
+    """The suffix is transliterated along with the name, so a Latin-only suffix
+    list never reaches name_core on ~40% of India fragments."""
+    cases = [
+        ("\u0d21\u0d4d\u0d30\u0d40\u0d02 \u0d2e\u0d40\u0d21\u0d3f\u0d2f \u0d2a\u0d4d\u0d30\u0d48\u0d35\u0d31\u0d4d\u0d31\u0d4d \u0d32\u0d3f\u0d2e\u0d3f\u0d31\u0d4d\u0d31\u0d21\u0d4d",
+         "\u0d21\u0d4d\u0d30\u0d40\u0d02 \u0d2e\u0d40\u0d21\u0d3f\u0d2f"),
+        ("\u0938\u093f\u091f\u0940 \u092a\u094d\u0930\u093e\u0907\u0935\u0947\u091f \u0932\u093f\u092e\u093f\u091f\u0947\u0921",
+         "\u0938\u093f\u091f\u0940"),
+    ]
+    for raw, expected_core in cases:
+        r = normalise.normalise_record(raw, "Mumbai", "India")
+        assert r.name_core == expected_core, (raw, r.name_core)
+        assert r.legal_suffixes, f"no suffix detected for {raw!r}"
+
+
+def test_latin_names_are_unaffected_by_the_indic_fix():
+    assert normalise.normalise_name("Acme Hardware LLC") == "acme hardware llc"
+    assert normalise.normalise_name("Soci\u00e9t\u00e9 G\u00e9n\u00e9rale SA") == "soci\u00e9t\u00e9 g\u00e9n\u00e9rale sa"
+    r = normalise.normalise_record("Gangapur Foods Ventures Pvt Ltd", "Nashik", "India")
+    assert r.name_core == "gangapur foods ventures"

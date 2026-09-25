@@ -16,9 +16,9 @@ These are **decisions/confirmations**, not code. Do not write dependent code pat
 - [ ] **A0.2 — Fragments map to ≤ 1 S1? (Q3, research.md §11 + §1.1 + audit #3).** Cannot be confirmed on real data pre-event; confirm on **proxy data generator invariants** now and re-run on real train at H0–6. Default assumption: YES. Expect 0 fragments whose ID appears in more than one S1 ground-truth row.
 - [ ] **A0.3 — Within-vendor 1:1 per S1? (Q4, research.md §11 + §1.1 + audit #3).** For each S1 entity, count matched S2 IDs and matched S3 IDs **separately**; if max is 1, the within-vendor one-to-one constraint holds. Default: **Unknown.**
   - Blocks: Owner D's optional bipartite-matching branch in N2 (research.md §3.4 `if VERIFY(one_per_vendor_per_S1)`). Tell D the answer is "unknown" so D codes the branch as **off by default**.
-- [ ] **A0.4 — Singleton & orphan rates (Q5, research.md §11 + audit #4, #6).** Unknown until real data. Set the proxy generator to a **parameterised** singleton rate so the rate is a knob, not a baked-in constant (research.md §1.2 notes a 40% singleton share would swing up to 0.40 of the score).
-- [ ] **A0.5 — Exact country string values (io_rules.md §3 `[VERIFY]`).** `"France"` vs `"FR"` vs `"france"`; `"US"` vs `"USA"` vs `"United States"`. Unknown until real data. Consequence for code now: **normalise casing but keep the label**, and route anything unseen to the `"other/unseen"` bucket — never a `{US, India}` branch.
-- [ ] **A0.6 — Non-Latin script census (research.md §3.1 `[VERIFY]`).** Count non-Latin characters per country. Only add rule-based transliteration **if** Devanagari appears **and** the library ships no external dictionaries. Until then: char n-gram similarity + Double Metaphone only (both algorithmic, not data).
+- [x] **A0.4 — Singleton & orphan rates (Q5). RESOLVED on real train data (2026-09-25): singleton rate is 5.58%, NOT the ~40% research.md §1.2 illustrates.** t=2-4 is 63.0%, t>=5 is 26.0%, mean t=3.46, max 11. US 5.583% / India 5.588%. This inverts the decoder assumption — see the measured-facts block in `owner-D-tasks.md`. Original task text: Set the proxy generator to a **parameterised** singleton rate so the rate is a knob, not a baked-in constant (research.md §1.2 notes a 40% singleton share would swing up to 0.40 of the score).
+- [~] **A0.5 — Exact country string values (io_rules.md §3 `[VERIFY]`). PARTIAL: train carries exactly `US` and `India`. France is absent from train, so its test spelling is still unconfirmed — re-run the probe against the test split.** Original task text: `"France"` vs `"FR"` vs `"france"`; `"US"` vs `"USA"` vs `"United States"`. Unknown until real data. Consequence for code now: **normalise casing but keep the label**, and route anything unseen to the `"other/unseen"` bucket — never a `{US, India}` branch.
+- [x] **A0.6 — Non-Latin script census. RESOLVED: 41.3% of S2 India rows and 32.4% of S3 India rows contain non-Latin script**, spanning Devanagari, Malayalam, Gujarati, Tamil, Telugu and Bengali — not Devanagari alone as research.md §3.1 anticipated. Handling is required, not conditional. Two patterns: fully transliterated names (zero char-n-gram overlap with a Latin S1 — only the dense multilingual encoder bridges these) and Latin names with a native-script state in the address tail. Original task text: Count non-Latin characters per country. Only add rule-based transliteration **if** Devanagari appears **and** the library ships no external dictionaries. Until then: char n-gram similarity + Double Metaphone only (both algorithmic, not data).
 
 ---
 
@@ -31,9 +31,9 @@ Implementation is done (A1–A5, `src/ber/`, 54 tests). What the **proxy** audit
 | A0.1 offline parser | n/a | **RESOLVED — excluded.** Address parsing is regex-only. A CRF trained only on provided addresses is the sole escalation path (Sprint 2+, only if the audit shows regex leaving signal) |
 | A0.2 fragment → ≤ 1 S1 | HOLDS (0 multi-owned) | re-run on real train at H0–6 |
 | A0.3 within-vendor 1:1 | **does NOT hold** (max 2/vendor) | tell Owner D: keep N2 bipartite branch **off** (D5.3) |
-| A0.4 singleton/orphan rates | parameterised knob, not baked in | real rates unknown until H0–6 |
-| A0.5 exact country strings | audit reports exact distinct values | real label spellings unknown |
-| A0.6 non-Latin census | Latin + accents only in proxy | real Devanagari census at H0–6 |
+| A0.4 singleton/orphan rates | parameterised knob, not baked in | **RESOLVED: 5.58% singleton, mean t=3.46** |
+| A0.5 exact country strings | audit reports exact distinct values | train = `US`, `India`. **France spelling still unconfirmed** |
+| A0.6 non-Latin census | Latin + accents only in proxy | **RESOLVED: 41%/32% of India rows non-Latin, 6+ scripts** |
 
 Run it with `python -m ber.run_audit --proxy` (or `--data-dir dataset/train` on real data).
 
@@ -75,7 +75,7 @@ Hand-written rule lists are **domain knowledge, not an external lookup** — but
 - [x] **A3.2 — Store suffix as a *feature*, not only a strip** (research.md §3.1 + §5 "Legal-suffix confusion"): emit **suffix agreement / conflict** so "X Pvt Ltd" vs "X LLP" is a conflict signal, not silently erased. This is a feature handed to Owner C.
 - [x] **A3.3 — Street abbreviation expansion** (research.md §3.1): `St↔Street`, `Rd↔Road`, `Ave↔Avenue`, `Bd/Blvd↔Boulevard`, `Nagar`, `Marg`.
 - [x] **A3.4 — FR rule list written now, not deferred.** France is **test-only** (io_rules.md §3, research.md §1.4) — any rule tuned only to US+India "will quietly degrade there." FR suffixes and `en face de`/`près de`/`CEDEX` land in Sprint 0, not Sprint 2.
-- [x] **A3.5 — Transliteration variant handling** (research.md §3.1): Shri/Shree/Sri, Enterprises/Ent., Aggarwal/Agarwal — via char n-gram similarity + Double Metaphone (A2.7). Gated by A0.6 for anything script-specific.
+- [x] **A3.5 — Transliteration variant handling** (research.md §3.1): Shri/Shree/Sri, Enterprises/Ent., Aggarwal/Agarwal — via char n-gram similarity + Double Metaphone (A2.7). A0.6 now resolved, so `rules.py` also carries native-script renderings of "Private Limited" for six Indic scripts: the suffix is transliterated along with the name, so a Latin-only list never reached `name_core` on ~40% of India fragments.
 - [ ] **A3.6 — Start the methodology-doc rule-list appendix.** Every rule list above gets documented as hand-written domain knowledge (research.md §9 compliance checklist). Stub it now; full doc is Sprint 3.
 
 ## A4. Placeholder detector

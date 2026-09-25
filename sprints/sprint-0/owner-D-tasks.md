@@ -9,10 +9,49 @@ Owner D area: Decoding / infra / scorer / validator / reproducibility — roadma
 
 ---
 
+## MEASURED FROM THE REAL TRAINING DATA (2026-09-25) — read before D5/D6
+
+`scripts/probe_cardinality_script.py` over all 2,206,821 train S1 rows. These
+numbers **replace the estimates research.md §1.2 was written against**, and they
+invert the decoder's central assumption.
+
+| quantity | research.md assumed | measured | consequence |
+|---|---|---|---|
+| singleton rate (t=0) | "say, 40%" (§1.2) | **5.58%** | singleton handling is worth ~0.056 of the score, not ~0.40 |
+| t=1 | — | 5.40% | |
+| t=2-4 | — | **63.0%** | the dominant regime |
+| t>=5 | — | **26.0%** | §5's "large cluster" slice is a quarter of all rows |
+| mean t | — | **3.46** (max 11) | |
+| ground-truth shape | Q7 disputed | **one row per S1, list shape** | io_rules.md §5.2 is right; research.md §11 Q7's "two columns" default is wrong |
+| singleton rate US / India | — | 5.583% / 5.588% | near-identical; not a country effect |
+
+**What this changes for D5/D6:**
+
+- **The empty set is no longer the right default.** research.md §3.5 makes `{}`
+  the default and searches `best_k` upward from 0. With mean t = 3.46, the
+  optimal `k` is ≥ 2 for the large majority of rows. Keep the `k = 0` branch
+  exactly as specified (D6.2 is still correct), but do not tune the decoder as
+  though abstention were the common case — it is 5.6% of rows.
+- **λ_null falls sharply** (D5.1). 94.4% of S1 rows have at least one match, so
+  the prior that a fragment is an orphan is far lower than a 40%-singleton world
+  implies. Fit it from the measured orphan rate, never from the §1.2 example.
+- **Precision pressure now lives in the t=2-4 band, not in singletons.** By
+  §1.2's own table, at t=2 missing one match costs 0.167 while adding one wrong
+  costs 0.286. That asymmetry is what the decoder must get right for 63% of rows.
+- **Re-derive, do not inherit, the "no min-k" rule.** research.md §2.2 rejects
+  Shopee-style min-k forcing because it "would zero every true singleton" — an
+  argument worth 0.40 under the old assumption and 0.056 under the real one. The
+  conclusion is probably still right, but the stated reasoning no longer carries
+  it, so D must re-check it on CV rather than cite §2.2.
+- **D1.4's slice reporting matters more, not less.** With 26% of rows at t >= 5,
+  the `t >= 5` slice is a first-class regime, not a tail.
+
+---
+
 ## D0. Blocking tasks (`[VERIFY]` — not coding tasks)
 
 - [ ] **D0.1 — Real timeline & team cap (Q1, research.md §11 + roadmap.md header).** Owner D per research.md §11, **resolve by: read official rules today.** Internshala: 25 Sep 2026 9:00 AM IST – 27 Sep 2026 9:00 PM IST; Top 50 announced 2 Oct 2026. Unstop: **2–4 members** vs Internshala's **3–4** — confirm the cap. Unstop: top 10 invited to a virtual Grand Finale 7 Oct 2026 (Internshala: 10:00 AM–3:00 PM IST). Research.md § Caveats notes the official details **conflict** with the stated "more than 1 month / 4+ people / multi-GPU" assumptions. This is research.md's own "**Next action today**".
-- [ ] **D0.2 — `candidate_pairs.tsv` schema (Q7, research.md §11).** Owner D per research.md §11, resolve by: sample file / rules. **Conflict to settle:** io_rules.md §5.2 says same schema as `matching_results.tsv` (`source1_entity_id`, `candidate_entity_ids` — one S1 row with a comma-separated list); research.md §11 Q7 records a competing default ("two columns S1 ID, fragment ID"). Also research.md §9: `[VERIFY required column names/format]`. **Use io_rules.md §5.2 until told otherwise**; tell Owner B the decision (B0.2).
+- [x] **D0.2 — `candidate_pairs.tsv` schema (Q7, research.md §11).** Owner D per research.md §11, resolve by: sample file / rules. **Conflict to settle:** io_rules.md §5.2 says same schema as `matching_results.tsv` (`source1_entity_id`, `candidate_entity_ids` — one S1 row with a comma-separated list); research.md §11 Q7 records a competing default ("two columns S1 ID, fragment ID"). Also research.md §9: `[VERIFY required column names/format]`. **RESOLVED: use io_rules.md §5.2.** **Evidence (2026-09-25):** the organiser's own `train_ground_truth.tsv` has header `source1_entity_id<TAB>matched_entity_ids` with n_data_rows == n_distinct_s1 == 2,206,821 — i.e. the io_rules.md §5.1 list shape, one row per S1. That settles Q7 in io_rules.md's favour; research.md §11's "two columns S1 ID, fragment ID" default is wrong. Tell Owner B (B0.2).
 - [ ] **D0.3 — Public LB fraction / submission limit (Q10, research.md §11).** Owner D, resolve by: platform. Unknown. Affects leaderboard hygiene (roadmap.md: at most 1 exploratory submission per major ladder step) and whether the known-answer probe in D0.4 is affordable.
 - [ ] **D0.4 — Scorer treatment of whitespace / list ordering (Q11, research.md §11 + io_rules.md §5.3).** Default assumption: **order-insensitive, trimmed.** Resolve by submitting a known-answer probe **only if a submission is cheap** (gated by D0.3). Keep the writer's output deterministic regardless.
 - [ ] **D0.5 — Local scorer vs leaderboard agreement.** Roadmap.md § Competition go/no-go after H6: local scorer reproduces the leaderboard within **±0.002** `[VERIFY vs LB]`. Cannot be checked pre-event — record it as the first competition-phase gate, not a Sprint 0 task.
@@ -42,7 +81,7 @@ This is Gate 0 criterion 3. Formula and singleton rule are exact — research.md
   | 4 | {1 correct} | 1 | 1 | 0.625 (1.25/2) |
   | 4 | {3 correct} | 3 | 3 | 0.9375 (3.75/4) |
 
-- [ ] **D1.4 — Slice-aware reporting** (research.md §8.2): country, vendor, `t ∈ {0, 1, 2–4, ≥ 5}`, chain vs non-chain, shared address, landmark-only, generic-name, non-ASCII. Also report **singleton accuracy** separately (research.md §8.1) — research.md §1.2 notes singleton decisions alone could swing up to 0.40 of the score.
+- [ ] **D1.4 — Slice-aware reporting** (research.md §8.2): country, vendor, `t ∈ {0, 1, 2–4, ≥ 5}`, chain vs non-chain, shared address, landmark-only, generic-name, non-ASCII. Also report **singleton accuracy** separately (research.md §8.1). Note research.md §1.2's "up to 0.40 of the score" was an illustrative guess; the measured singleton rate is **5.58%**, so the `t=2-4` (63%) and `t>=5` (26%) slices carry the score instead.
 - [ ] **D1.5 — Order-insensitive, trimmed comparison** (io_rules.md §5.3 `[VERIFY]`, D0.4) so the scorer matches the assumed grader behaviour.
 
 ## D2. Grouped CV split machinery

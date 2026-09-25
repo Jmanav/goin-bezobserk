@@ -33,6 +33,19 @@ LEGAL_SUFFIXES = {
         "and sons",
         "enterprises",
         "traders",
+        # Native-script renderings of "Private Limited". The audit found 41% of
+        # S2 and 32% of S3 India rows carry non-Latin script, and the suffix is
+        # transliterated along with the name, so a Latin-only list silently
+        # fails to reach name_core on those rows. Transliterations of an English
+        # legal form, not gazetteer entries (research.md 3.1 / 9).
+        "प्राइवेट लिमिटेड",        # Devanagari (Hindi/Marathi)
+        "प्रा. लि.",                # Devanagari, abbreviated
+        "പ്രൈവറ്റ് ലിമിറ്റഡ്",   # Malayalam
+        "પ્રાઇવેટ લિમિટેડ",        # Gujarati
+        "பிரைவேட் லிமிடெட்",     # Tamil
+        "ప్రైవేట్ లిమిటెడ్",        # Telugu
+        "প্রাইভেট লিমিটেড",       # Bengali
+        "ಪ್ರೈವೇಟ್ ಲಿಮಿಟೆಡ್",     # Kannada
     ],
     "FR": [
         "sarl",

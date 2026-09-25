@@ -113,11 +113,29 @@ def normalise_name(raw):
     return _WS.sub(" ", text).strip()
 
 
+# Unicode categories for combining marks: Mn (nonspacing, e.g. virama),
+# Mc (spacing combining, e.g. Indic vowel signs). Both are part of the
+# letter they attach to and must survive punctuation stripping.
+_COMBINING_CATEGORIES = frozenset({"Mn", "Mc"})
+
+
 def _strip_non_alnum_accent_safe(text):
-    """Drop punctuation while keeping accented letters (and digits) intact."""
+    """Drop punctuation while keeping letters (accented or Indic) and digits.
+
+    Combining marks are kept explicitly. Indic vowel signs and the virama are
+    categories Mn/Mc, for which str.isalnum() is False, so testing isalnum alone
+    replaced every one of them with a space and shattered Indic words into
+    single letters: a Malayalam name reduced to its first character. That is
+    ~40% of India fragments, so the category test is load-bearing, not a nicety.
+    """
     out = []
     for ch in text:
-        if ch.isalnum() or ch.isspace() or ch in "'/#-":
+        if (
+            ch.isalnum()
+            or ch.isspace()
+            or ch in "'/#-"
+            or unicodedata.category(ch) in _COMBINING_CATEGORIES
+        ):
             out.append(ch)
         else:
             out.append(" ")

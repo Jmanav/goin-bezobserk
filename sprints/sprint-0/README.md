@@ -78,11 +78,11 @@ D5 N2 marginals ─────────────────────�
 | Q3 fragment → ≤ 1 S1? | research.md §11, §1.1 | **A** (A0.2) | D — the whole asymmetric framing rests on it |
 | Q4 within-vendor 1:1 per S1? | research.md §11, §1.1 | **A** (A0.3) | **D5.3** — bipartite branch stays **off by default** |
 | Q6 cross-country matches? | research.md §11, §3.2 | **B** (B0.1) | B — country sharding stays **off by default** |
-| Q7 `candidate_pairs.tsv` schema | research.md §11 | **D** (D0.2) | **B0.2** — B writes the content, D settles the schema |
+| Q7 `candidate_pairs.tsv` schema | research.md §11 | **D** (D0.2) | **RESOLVED** — io_rules.md §5.2 list shape, confirmed by the real ground-truth file |
 | Q8 test text for DAPT? | research.md §11, §3.6 | **C** (C0.1) | C — default train-only |
 | Q9 "≤ 8B" incl. embeddings? | research.md §11, §9 | **C** (C0.2) | C — default yes ⇒ avoid Qwen3-8B |
 
-**Open conflict to settle (D0.2 / B0.2):** io_rules.md §5.2 specifies `candidate_pairs.tsv` as one S1 row with a comma-separated `candidate_entity_ids` list; research.md §11 Q7 records a different default ("two columns S1 ID, fragment ID"). **Use io_rules.md §5.2** until organisers say otherwise.
+**RESOLVED (D0.2 / B0.2):** `candidate_pairs.tsv` uses the io_rules.md §5.2 shape — one S1 row with a comma-separated `candidate_entity_ids` list. **Evidence (2026-09-25):** the organiser's own `train_ground_truth.tsv` has header `source1_entity_id<TAB>matched_entity_ids` with n_data_rows == n_distinct_s1 == 2,206,821 — i.e. the io_rules.md §5.1 list shape, one row per S1. That settles Q7 in io_rules.md's favour; research.md §11's "two columns S1 ID, fragment ID" default is wrong.
 
 ### Parallelism
 
