@@ -26,6 +26,7 @@ Each section is independently wrapped, so one failure never loses the others.
 
 import csv
 import json
+import os
 import random
 import sys
 import unicodedata
@@ -36,7 +37,12 @@ import pandas as pd
 
 # ---------------------------------------------------------------- config ----
 DATA_ROOT = "/content/drive/MyDrive/6ab10eb3b23ba_student_resource/student_resource/dataset"
-TRAIN = Path(DATA_ROOT) / "train"
+
+# Which split to probe. The test split has no ground truth, so sections 1 and 1b
+# report that and skip; section 2 still runs and is what confirms France's exact
+# country string and the test-side script rates.
+SPLIT = os.environ.get("BER_SPLIT", "train")
+TRAIN = Path(DATA_ROOT) / SPLIT
 
 N_EYEBALL = 20          # rows in the final sample (reservoir size)
 WINDOW_ROWS = 1_000_000 # rows scanned per source before sampling stops
@@ -95,9 +101,9 @@ def find_train_dir():
         return TRAIN
     base = Path("/content/drive/MyDrive")
     if base.is_dir():
-        for hit in base.rglob("dataset/train"):
+        for hit in base.rglob(f"dataset/{SPLIT}"):
             return hit
-    raise FileNotFoundError(f"no train dir at {TRAIN}")
+    raise FileNotFoundError(f"no {SPLIT} dir at {TRAIN}")
 
 
 print(__doc__.split("Each section")[0].strip())
@@ -118,7 +124,14 @@ except Exception as exc:
 try:
     if train_dir is None:
         raise FileNotFoundError(f"train dir not found (looked at {TRAIN})")
-    gt_path = next(train_dir.glob("*ground_truth*.tsv"))
+    _gt_files = sorted(train_dir.glob("*ground_truth*.tsv"))
+    if not _gt_files:
+        raise FileNotFoundError(
+            f"no ground-truth file in {train_dir}. The test split ships without "
+            "one, so sections 1 and 1b cannot run there -- section 2 still can, "
+            "and is what confirms the country labels and script rates."
+        )
+    gt_path = _gt_files[0]
 
     gt = read_source(gt_path)
     key_col, val_col = gt.columns[0], gt.columns[1]
@@ -322,7 +335,8 @@ try:
         "window_rows_per_source": WINDOW_ROWS,
         "sample_seed": SAMPLE_SEED,
         "per_source": per_source,
-        "country_labels_seen": dict(label_counts.most_common(10)),
+        "country_labels_seen": dict(label_counts.most_common(20)),
+        "all_distinct_country_labels": sorted(label_counts),
         "script_flag_counts_in_scan": dict(flag_counts),
         "n_non_latin_seen_total": n_seen,
         "sampling": ("uniform reservoir over the whole window, so the sample is "
