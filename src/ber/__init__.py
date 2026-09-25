@@ -54,3 +54,4 @@ __all__ = [
 ]
 
 from . import decode, scorer, submission  # noqa: E402,F401
+from . import blocking, blocking_report, dense  # noqa: E402,F401

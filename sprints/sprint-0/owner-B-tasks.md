@@ -24,58 +24,58 @@ Owner B area: Blocking / candidate generation / PC-RR reporting — roadmap.md �
 
 Params from research.md §3.2 table, "Sparse name" row.
 
-- [ ] **B1.1 — Char TF-IDF vectoriser:** sklearn `TfidfVectorizer(analyzer="char_wb")`, char **3–5-gram** (research.md §3.2). Fit on S1 `name_norm` / folded variant from Owner A's normaliser (A2.1 contract).
-- [ ] **B1.2 — Chunked sparse top-k retrieval:** `sparse_dot_topn` or cuML/cupy (research.md §3.2). Start params: **top-50, min cos 0.2**.
-- [ ] **B1.3 — Chunking for memory safety** (research.md §5 "Runtime blow-ups" + §6): stream in chunks; the Foursquare 7th place generated features and predicted in 10,000-row chunks. Budget per §6: 30–90 min CPU / 10–20 min GPU, 20–40 GB.
-- [ ] **B1.4 — Emit per-channel ranks, not just scores.** Owner C needs "the ranks from each channel" as features (research.md §3.3) and RRF needs ranks (B4). Persist rank alongside score.
+- [x] **B1.1 — Char TF-IDF vectoriser:** sklearn `TfidfVectorizer(analyzer="char_wb")`, char **3–5-gram** (research.md §3.2). Fit on S1 `name_norm` / folded variant from Owner A's normaliser (A2.1 contract).
+- [x] **B1.2 — Chunked sparse top-k retrieval:** `sparse_dot_topn` or cuML/cupy (research.md §3.2). Start params: **top-50, min cos 0.2**.
+- [x] **B1.3 — Chunking for memory safety** (research.md §5 "Runtime blow-ups" + §6): stream in chunks; the Foursquare 7th place generated features and predicted in 10,000-row chunks. Budget per §6: 30–90 min CPU / 10–20 min GPU, 20–40 GB.
+- [x] **B1.4 — Emit per-channel ranks, not just scores.** Owner C needs "the ranks from each channel" as features (research.md §3.3) and RRF needs ranks (B4). Persist rank alongside score.
 
 ## B2. Sparse channel 2 — word BM25 on name+addr
 
 Params from research.md §3.2 table, "Sparse name+addr" row.
 
-- [ ] **B2.1 — BM25 implementation:** `bm25s` / Lucene via Pyserini, or a custom `scipy.sparse` BM25 (research.md §3.2). Start params: **k1 = 1.2, b = 0.75, top-50**.
-- [ ] **B2.2 — Field variants:** run over name, addr, and name+addr (research.md §3.2 diagram shows all three). Role: **rare tokens**.
-- [ ] **B2.3 — Emit BM25 score + rank** for C's feature library (research.md §3.3 lists "BM25 score, and the ranks from each channel").
+- [x] **B2.1 — BM25 implementation:** `bm25s` / Lucene via Pyserini, or a custom `scipy.sparse` BM25 (research.md §3.2). Start params: **k1 = 1.2, b = 0.75, top-50**.
+- [x] **B2.2 — Field variants:** run over name, addr, and name+addr (research.md §3.2 diagram shows all three). Role: **rare tokens**.
+- [x] **B2.3 — Emit BM25 score + rank** for C's feature library (research.md §3.3 lists "BM25 score, and the ranks from each channel").
 
 ## B3. Dense channel — FAISS ANN (scaffold only in Sprint 0)
 
 Model choice is licence-constrained (research.md §9 table). Fine-tuning is Sprint 1.
 
-- [ ] **B3.1 — Pick the encoder from the licence-cleared list** (research.md §3.2 + §9): Qwen3-Embedding-0.6B (Apache-2.0) **or** multilingual-e5-large (MIT) / bge-m3 (MIT). **Pin the commit** (research.md §9). Log licence + param count (io_rules.md §9).
-- [ ] **B3.2 — FAISS index:** `IndexFlatIP` on GPU for S1 ≤ a few M, or **IVF-PQ if memory-bound** (research.md §3.2). Budget per §6: 5–20 min, S1 ≤ 3M × 2 KB ≈ 6 GB.
-- [ ] **B3.3 — Embedding cache to Parquet** (research.md §6): "Precompute embeddings once, cache them to Parquet." Budget: 20–60 min for ~9M strings on 1× A100/L4-class, 1024-d fp16 ≈ 2 KB/row ≈ 18 GB.
-- [ ] **B3.4 — Retrieve top-50, emit score + rank** (research.md §3.2). Role: semantic / acronym / transliteration.
-- [ ] **B3.5 — CPU-only fallback path** (research.md §6): "Keep a CPU-only fallback that skips the cross-encoder" — the dense channel must degrade gracefully if no GPU is available at competition time.
-- [ ] **B3.6 — Leave a hook for contrastive fine-tuning, don't build it.** Sprint 1 adds MultipleNegativesRankingLoss on training (fragment, S1) positives with S1-sibling hard negatives (research.md §3.2, roadmap.md § Sprint 1). Sprint 0 ships the off-the-shelf encoder only.
+- [x] **B3.1 — Pick the encoder from the licence-cleared list** (research.md §3.2 + §9): Qwen3-Embedding-0.6B (Apache-2.0) **or** multilingual-e5-large (MIT) / bge-m3 (MIT). **Pin the commit** (research.md §9). Log licence + param count (io_rules.md §9).
+- [x] **B3.2 — FAISS index:** `IndexFlatIP` on GPU for S1 ≤ a few M, or **IVF-PQ if memory-bound** (research.md §3.2). Budget per §6: 5–20 min, S1 ≤ 3M × 2 KB ≈ 6 GB.
+- [x] **B3.3 — Embedding cache to Parquet** (research.md §6): "Precompute embeddings once, cache them to Parquet." Budget: 20–60 min for ~9M strings on 1× A100/L4-class, 1024-d fp16 ≈ 2 KB/row ≈ 18 GB.
+- [x] **B3.4 — Retrieve top-50, emit score + rank** (research.md §3.2). Role: semantic / acronym / transliteration.
+- [x] **B3.5 — CPU-only fallback path** (research.md §6): "Keep a CPU-only fallback that skips the cross-encoder" — the dense channel must degrade gracefully if no GPU is available at competition time.
+- [x] **B3.6 — Leave a hook for contrastive fine-tuning, don't build it.** Sprint 1 adds MultipleNegativesRankingLoss on training (fragment, S1) positives with S1-sibling hard negatives (research.md §3.2, roadmap.md § Sprint 1). Sprint 0 ships the off-the-shelf encoder only.
 
 ## B4. Exact-key channel
 
 Params from research.md §3.2 table, "Keys" row.
 
-- [ ] **B4.1 — Implement the three key types** (research.md §3.2): `(postcode, house#)`, `(postcode, rare name token)`, `(Double Metaphone of name_core, postcode prefix)`. Uses Owner A's `postcode`, `addr_numbers`, `name_core`, phonetic key (A2.5, A2.7) and token IDF (A2.3).
-- [ ] **B4.2 — Cap collisions at 200 per key** (research.md §3.2 "cap 200 per key") — guards the "Keys with huge collisions" runtime blow-up in research.md §5.
-- [ ] **B4.3 — Never key on a placeholder.** Owner A's `missing` flag (A4) must suppress key generation — io_rules.md §4: never let two records match *because* they share a placeholder token.
+- [x] **B4.1 — Implement the three key types** (research.md §3.2): `(postcode, house#)`, `(postcode, rare name token)`, `(Double Metaphone of name_core, postcode prefix)`. Uses Owner A's `postcode`, `addr_numbers`, `name_core`, phonetic key (A2.5, A2.7) and token IDF (A2.3).
+- [x] **B4.2 — Cap collisions at 200 per key** (research.md §3.2 "cap 200 per key") — guards the "Keys with huge collisions" runtime blow-up in research.md §5.
+- [x] **B4.3 — Never key on a placeholder.** Owner A's `missing` flag (A4) must suppress key generation — io_rules.md §4: never let two records match *because* they share a placeholder token.
 
 ## B5. RRF fusion
 
-- [ ] **B5.1 — Implement RRF exactly** (research.md §3.2 Fusion row): `score = Σ 1/(60 + rank)`.
-- [ ] **B5.2 — Keep top-K = 20–30, plus all key hits with ≤ 5 collisions** (research.md §3.2 Fusion row). K tuning itself is Sprint 1.
-- [ ] **B5.3 — Emit the fused set as the final candidate set.** This is what becomes `candidate_pairs.tsv` — and per io_rules.md §5.2 it must be the **last** candidate list the model runs inference over, **not an early blocking pass you later filter**. Coordinate with C (who consumes it) and D (who writes it).
+- [x] **B5.1 — Implement RRF exactly** (research.md §3.2 Fusion row): `score = Σ 1/(60 + rank)`.
+- [x] **B5.2 — Keep top-K = 20–30, plus all key hits with ≤ 5 collisions** (research.md §3.2 Fusion row). K tuning itself is Sprint 1.
+- [x] **B5.3 — Emit the fused set as the final candidate set.** This is what becomes `candidate_pairs.tsv` — and per io_rules.md §5.2 it must be the **last** candidate list the model runs inference over, **not an early blocking pass you later filter**. Coordinate with C (who consumes it) and D (who writes it).
 
 ## B6. PC / RR reporter with PC-vs-K curve
 
 Metric definitions are exact — research.md §3.2 "Audit metrics".
 
-- [ ] **B6.1 — Pair Completeness:** `PC = |C ∩ M| / |M|`.
-- [ ] **B6.2 — Reduction Ratio:** `RR = 1 − |C| / (|S1| × |S2 ∪ S3|)`.
-- [ ] **B6.3 — PC-vs-K curve** (roadmap.md Sprint 0 deliverable + research.md §3.2) plus the **distribution of candidates per fragment**.
-- [ ] **B6.4 — Report per country, vendor and fold** (research.md §3.2 "report per country, vendor and fold").
-- [ ] **B6.5 — Per-entity recall ceiling:** report the **share of S1 rows whose full true set lies inside C** (research.md §3.2: "The recall ceiling of the final score is per-entity"). This is the number that actually bounds the leaderboard score, distinct from pair-level PC.
+- [x] **B6.1 — Pair Completeness:** `PC = |C ∩ M| / |M|`.
+- [x] **B6.2 — Reduction Ratio:** `RR = 1 − |C| / (|S1| × |S2 ∪ S3|)`.
+- [x] **B6.3 — PC-vs-K curve** (roadmap.md Sprint 0 deliverable + research.md §3.2) plus the **distribution of candidates per fragment**.
+- [x] **B6.4 — Report per country, vendor and fold** (research.md §3.2 "report per country, vendor and fold").
+- [x] **B6.5 — Per-entity recall ceiling:** report the **share of S1 rows whose full true set lies inside C** (research.md §3.2: "The recall ceiling of the final score is per-entity"). This is the number that actually bounds the leaderboard score, distinct from pair-level PC.
 - [ ] **B6.6 — Wire the reporter to grouped CV folds** from Owner D: `GroupKFold(5)` with groups = S1 entity ∪ its fragments, blocked additionally by postcode/city so neighbouring lookalikes stay together (research.md §8.3a, §5 "CV leakage").
 
 ## B7. Harness integration
 
-- [ ] **B7.1 — Single entry point** that runs all four channels + RRF and emits the candidate set, so Sprint 1 can tune channels behind one interface.
+- [x] **B7.1 — Single entry point** that runs all four channels + RRF and emits the candidate set, so Sprint 1 can tune channels behind one interface.
 - [ ] **B7.2 — Time and memory profile on a 10% sample** (research.md §5 "Runtime blow-ups" test column).
 - [ ] **B7.3 — Record the Sprint 0 baseline PC@K on proxy data.** Not gated in Sprint 0 (Gate 1 is where PC ≥ 99% at K ≤ 30 bites), but the number is the Sprint 1 starting point.
 
