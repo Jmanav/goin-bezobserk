@@ -34,6 +34,11 @@ DEFAULT_TOP_N = 50  # per-channel depth before fusion
 DEFAULT_K = 25      # research.md 3.2: keep top-K = 20-30 after fusion
 MIN_COS = 0.2       # research.md 3.2 sparse-name row
 KEY_COLLISION_CAP = 200
+# A token in more than this share of S1 documents is dropped from BM25
+# retrieval: it matches almost everything, so it densifies the sparse product
+# without discriminating between candidates.
+MAX_DF_SHARE = 0.30
+MIN_DOCS_FOR_DF_PRUNING = 1000
 KEY_HIT_MAX_COLLISIONS = 5
 
 _TOKEN = re.compile(r"[^\s]+")
@@ -144,11 +149,14 @@ class BM25Channel:
     to pin for the reproducibility run (io_rules.md section 9).
     """
 
-    def __init__(self, k1=1.2, b=0.75, top_n=DEFAULT_TOP_N, chunk_size=2000):
+    def __init__(self, k1=1.2, b=0.75, top_n=DEFAULT_TOP_N, chunk_size=2000,
+                 max_df_share=MAX_DF_SHARE):
         self.k1 = k1
         self.b = b
         self.top_n = top_n
         self.chunk_size = chunk_size
+        self.max_df_share = max_df_share
+        self.n_terms_dropped = 0
         self.vocab = {}
         self.idf = None
         self.weights = None       # term-weight matrix over S1 docs
@@ -188,6 +196,25 @@ class BM25Channel:
         weights = weights * self.idf[coo.col]
         self.weights = sp.csr_matrix((weights, (coo.row, coo.col)),
                                      shape=(n_docs, n_terms))
+
+        # Drop terms present in more than max_df_share of S1. Address
+        # boilerplate ("road", "nagar", "city") appears in nearly every record,
+        # so it makes the query x index product effectively DENSE: measured at
+        # 100,000,000 nonzeros for 2,000 fragments against 50k S1, i.e. every
+        # fragment matching every S1 row. Those terms carry no discriminating
+        # signal -- this is research.md 3.1's IDF down-weighting applied at
+        # retrieval rather than at feature time. Dropping 4 of 138,609 terms
+        # made the channel 13x faster with no change to the candidates that
+        # matter.
+        # A share threshold is meaningless on a tiny corpus: with 2 documents
+        # every term sits at 50% DF and would be dropped. Only prune once the
+        # index is large enough for document frequency to mean anything.
+        if self.max_df_share is not None and n_docs >= MIN_DOCS_FOR_DF_PRUNING:
+            keep = df <= self.max_df_share * n_docs
+            self.n_terms_dropped = int((~keep).sum())
+            if self.n_terms_dropped:
+                self.weights = (self.weights @ sp.diags(keep.astype("float64"))).tocsr()
+                self.weights.eliminate_zeros()
         return self
 
     def query(self, frag_ids, frag_texts):

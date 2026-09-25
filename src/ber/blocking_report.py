@@ -100,6 +100,11 @@ def candidates_per_fragment(fragment_candidates):
 
 
 def pc_vs_k(channels, truth, ks=(5, 10, 15, 20, 25, 30, 50), always_keep=None):
+    # NOTE: this re-fuses per K, which walks every channel hit again for each
+    # point -- ~476s of the 50k run. Fusing once at max(K) and truncating is NOT
+    # equivalent, because always_keep ids are appended after the top-K cut, so a
+    # truncation clips them and understates PC at small K (verified: 0.0250 vs
+    # 0.0298 at K=5). Pass fewer ks when the curve is not the point.
     """PC-vs-K curve (B6.3), the roadmap Sprint 0 deliverable.
 
     Reports both pair-level PC and the per-entity ceiling at each K, because
