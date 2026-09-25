@@ -113,13 +113,32 @@ class ValidationReport:
                 "n_predicted_ids": self.n_predicted_ids, "problems": self.problems}
 
 
-def validate(matching_path, candidate_path, s1_ids, fragment_ids):
+def validate(matching_path, candidate_path, s1_ids, fragment_ids,
+             test_s1_path=None, is_submission=False):
     """Team pre-flight assertions (D4.2, D4.3).
 
     Complements the organiser's validator rather than replacing it: run both.
     Returns a report instead of raising so every problem surfaces at once.
+
+    `s1_ids` is whatever the caller is scoring, which for a sampled development
+    run is a subset. That alone cannot tell a real submission from a sample: this
+    validator once reported PASS on 20,000 train rows while the organiser's
+    validator failed the same files for missing all 1,732,544 test entities.
+    Pass `test_s1_path` (test_source1.tsv) with `is_submission=True` to check
+    against the authoritative universe instead.
     """
     problems = []
+    if is_submission:
+        if test_s1_path is None:
+            problems.append(
+                "is_submission=True requires test_s1_path: without the test "
+                "S1 file this cannot verify the submission covers every "
+                "required entity (io_rules.md 5.1)"
+            )
+        else:
+            authoritative = read_source_ids(test_s1_path)
+            s1_ids = sorted(authoritative)
+            fragment_ids = set(fragment_ids)
     expected = [str(s).strip() for s in s1_ids]
     expected_set = set(expected)
 
@@ -175,6 +194,22 @@ def validate(matching_path, candidate_path, s1_ids, fragment_ids):
 
     return ValidationReport(problems=problems, n_rows=len(submitted),
                             n_predicted_ids=n_ids)
+
+
+def read_source_ids(path):
+    """entity_id column of a source TSV, read under the io_rules.md 1 contract."""
+    import csv as _csv
+
+    out = set()
+    with open(path, "r", encoding="utf-8", newline="") as handle:
+        reader = _csv.reader(handle, delimiter="	", quoting=_csv.QUOTE_NONE)
+        header = next(reader, None)
+        if header is None:
+            return out
+        for row in reader:
+            if row:
+                out.add(row[0].strip())
+    return out
 
 
 def _raw_rows(path, problems, label):

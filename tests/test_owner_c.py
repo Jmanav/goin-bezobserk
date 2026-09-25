@@ -166,3 +166,43 @@ def test_scorer_rejects_single_class_input():
     X = np.zeros((10, len(F.FEATURE_NAMES)), dtype="float32")
     with pytest.raises(ValueError):
         matcher.PairScorer().fit(X, np.zeros(10, dtype="int8"))
+
+
+# --- persistence: the test split has no ground truth to train on -------------
+
+
+def test_scorer_round_trips(tmp_path):
+    fused, fs, fr, s1, truth = _toy_training_set(150)
+    idf = F.token_idf([r.name_tokens for r in s1.values()])
+    ncc, adc = F.corpus_counts(s1)
+    X, y, _ = matcher.build_training_pairs(fused, fs, fr, s1, truth, idf, ncc, adc)
+    model = matcher.PairScorer(n_estimators=40).fit(X, y)
+
+    path = matcher.save_scorer(model, tmp_path / "m.pkl")
+    back = matcher.load_scorer(path)
+    assert back.backend == model.backend
+    assert np.allclose(back.predict(X), model.predict(X))
+
+
+def test_index_stats_round_trip(tmp_path):
+    """idf and the chain counts are computed over S1, so recomputing them on the
+    test split would shift the feature distribution the model was fitted on."""
+    _, _, _, s1, _ = _toy_training_set(30)
+    idf = F.token_idf([r.name_tokens for r in s1.values()])
+    ncc, adc = F.corpus_counts(s1)
+    path = matcher.save_index_stats(tmp_path / "s.pkl", idf, ncc, adc)
+    i2, n2, a2 = matcher.load_index_stats(path)
+    assert i2 == idf and n2 == ncc and a2 == adc
+
+
+def test_loading_fails_loudly_on_a_feature_registry_change(tmp_path, monkeypatch):
+    """A silent column mismatch would score garbage, so it must raise."""
+    fused, fs, fr, s1, truth = _toy_training_set(60)
+    idf = F.token_idf([r.name_tokens for r in s1.values()])
+    ncc, adc = F.corpus_counts(s1)
+    X, y, _ = matcher.build_training_pairs(fused, fs, fr, s1, truth, idf, ncc, adc)
+    path = matcher.save_scorer(matcher.PairScorer(n_estimators=20).fit(X, y),
+                               tmp_path / "m.pkl")
+    monkeypatch.setattr(F, "FEATURE_NAMES", F.FEATURE_NAMES[:-1])
+    with pytest.raises(ValueError, match="feature registry changed"):
+        matcher.load_scorer(path)

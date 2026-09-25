@@ -43,6 +43,7 @@ MODEL_KEY = os.environ.get("BER_MODEL", "multilingual-e5-small")
 OUT_DIR = Path(os.environ.get("BER_OUT", "output"))
 LAM_NULL = float(os.environ.get("BER_LAM_NULL", "1.0"))
 TRAIN_MODEL = os.environ.get("BER_TRAIN_MODEL", "1") == "1"
+MODEL_DIR = Path(os.environ.get("BER_MODEL_DIR", "models"))
 SEED = 42
 
 
@@ -111,6 +112,35 @@ def main():
     # which is a rank heuristic, not a scorer. Training needs ground truth, so
     # this path is available on train and skipped on test.
     marginals = None
+    model_path = MODEL_DIR / "pair_scorer.pkl"
+    stats_path = MODEL_DIR / "index_stats.pkl"
+
+    if not truth and model_path.exists():
+        # Test split: no ground truth to train on, so reuse the scorer fitted on
+        # train. The S1-derived statistics travel with it, because recomputing
+        # idf and the chain counts over test S1 would shift the feature
+        # distribution the model was fitted on.
+        t0 = time.time()
+        model = matcher.load_scorer(model_path)
+        idf, ncc, adc = matcher.load_index_stats(stats_path)
+        fs = {}
+        blocking.reciprocal_rank_fusion(channels, k=K, always_keep=always,
+                                        fused_scores=fs)
+        s1_recs = {r.entity_id: normalise_record(r.business_name,
+                                                 r.business_address, r.country)
+                   for r in s1.itertuples(index=False)}
+        fr_recs = {r.entity_id: normalise_record(r.business_name,
+                                                 r.business_address, r.country)
+                   for r in frags.itertuples(index=False)}
+        marginals = matcher.score_candidates(
+            model, fused, fs, fr_recs, s1_recs, idf, ncc, adc)
+        print(f"  scoring: {time.time()-t0:.1f}s  loaded {model_path} "
+              f"backend={model.backend}")
+    elif not truth:
+        print(f"  scoring: NO MODEL at {model_path} -- falling back to the rank")
+        print("    heuristic, which scores far below a trained model. Run the")
+        print("    train split first to fit and persist one.")
+
     if truth and TRAIN_MODEL:
         t0 = time.time()
         fs = {}
@@ -136,8 +166,11 @@ def main():
             model = matcher.PairScorer().fit(X[tr], y[tr])
             marginals = matcher.score_candidates(
                 model, fused, fs, fr_recs, s1_recs, idf, ncc, adc)
+            matcher.save_scorer(model, model_path)
+            matcher.save_index_stats(stats_path, idf, ncc, adc)
             print(f"  scoring: {time.time()-t0:.1f}s  backend={model.backend} "
                   f"pairs={len(X):,} positives={int(y.sum()):,}")
+            print(f"  saved {model_path} and {stats_path} for the test run")
             imp = model.feature_importance(8)
             if imp:
                 print("  top features:", ", ".join(imp))
@@ -163,8 +196,13 @@ def main():
 
     # --- validate -----------------------------------------------------------
     fragment_ids = set(frags["entity_id"])
-    report = submission.validate(m_path, c_path, s1_ids=s1_ids,
-                                 fragment_ids=fragment_ids)
+    test_s1 = root / "test" / "test_source1.tsv"
+    submitting = SPLIT == "test" and N_S1 >= 1_000_000
+    report = submission.validate(
+        m_path, c_path, s1_ids=s1_ids, fragment_ids=fragment_ids,
+        test_s1_path=test_s1 if (submitting and test_s1.exists()) else None,
+        is_submission=submitting and test_s1.exists(),
+    )
     show("team validator (D4.2, D4.3)", {
         "ok": report.ok, "n_rows": report.n_rows,
         "n_predicted_ids": report.n_predicted_ids,
@@ -195,9 +233,22 @@ def main():
         print("\nThe gap between this score and the ceiling is what Owner C's")
         print("model is worth. The score itself is a floor, not a result.")
 
+    # A sampled run cannot pass Gate 0 criterion 2. The team validator checks
+    # only the ids it was handed, so on a 20k train sample it reported PASS while
+    # the organiser's validator failed the same files for missing all 1,732,544
+    # test entities. Only a full test-split run produces a submittable file.
+    is_full_test = SPLIT == "test" and N_S1 >= 1_000_000
     print("\n" + "=" * 72)
     print(f"Gate 0 criterion 1 (end-to-end run): {'PASS' if report.ok else 'FAIL'}")
-    print(f"Gate 0 criterion 2 (validator PASS): {'PASS' if report.ok else 'FAIL'}")
+    if is_full_test:
+        print(f"Gate 0 criterion 2 (validator PASS): {'PASS' if report.ok else 'FAIL'}")
+    else:
+        print(f"Gate 0 criterion 2 (validator PASS): NOT TESTED -- sampled "
+              f"{SPLIT} run, not a submittable file.")
+        print("  For a real submission every test S1 row must be present:")
+        print("    BER_SPLIT=test BER_N_S1=2000000 BER_TRAIN_MODEL=0")
+        print("  (the test split ships no ground truth, so the model must be")
+        print("   trained on train and reused -- see the model-reuse note)")
     print("=" * 72)
     return 0 if report.ok else 1
 

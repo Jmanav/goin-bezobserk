@@ -149,3 +149,85 @@ def score_candidates(scorer, fused, fused_scores, frag_records, s1_records,
                 i += 1
         out[frag_id] = row
     return out
+
+
+# --- persistence ------------------------------------------------------------
+#
+# The test split ships no ground truth, so the scorer must be trained on train
+# and reused on test. Without this the test run falls back to the decoder's rank
+# heuristic and discards the model's contribution entirely.
+
+
+def save_scorer(scorer, path):
+    """Persist a fitted scorer, with the feature registry it was trained on.
+
+    The registry is stored so a later load fails loudly on a feature-order
+    change rather than silently scoring garbage.
+    """
+    import pickle
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "backend": scorer.backend,
+        "params": scorer.params,
+        "feature_names": list(featlib.FEATURE_NAMES),
+        "model": (scorer.model.model_to_string()
+                  if scorer.backend == "lightgbm" else scorer.model),
+    }
+    with open(path, "wb") as handle:
+        pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
+def load_scorer(path):
+    import pickle
+
+    with open(path, "rb") as handle:
+        payload = pickle.load(handle)
+
+    if payload["feature_names"] != list(featlib.FEATURE_NAMES):
+        raise ValueError(
+            "feature registry changed since this scorer was trained: the model "
+            "expects %d features in a different order. Retrain rather than "
+            "scoring with mismatched columns."
+            % len(payload["feature_names"])
+        )
+
+    scorer = PairScorer(params=payload["params"])
+    scorer.backend = payload["backend"]
+    if payload["backend"] == "lightgbm":
+        if not HAVE_LIGHTGBM:
+            raise RuntimeError("scorer was trained with LightGBM, which is absent")
+        scorer.model = lgb.Booster(model_str=payload["model"])
+    else:
+        scorer.model = payload["model"]
+    return scorer
+
+
+def save_index_stats(path, idf, name_core_counts, address_counts):
+    """Persist the S1-derived statistics features depend on.
+
+    idf, chain counts and shared-address counts are computed over S1. Recomputing
+    them from the test S1 would silently change the feature distribution the
+    model was fitted on, so they travel with the model.
+    """
+    import pickle
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as handle:
+        pickle.dump({"idf": idf, "name_core_counts": name_core_counts,
+                     "address_counts": address_counts}, handle,
+                    protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
+def load_index_stats(path):
+    import pickle
+
+    with open(path, "rb") as handle:
+        payload = pickle.load(handle)
+    return payload["idf"], payload["name_core_counts"], payload["address_counts"]
