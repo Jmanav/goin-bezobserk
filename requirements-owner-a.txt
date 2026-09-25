@@ -1,0 +1,11 @@
+# Owner A (Sprint 0) dependencies. CPU-only.
+#
+# Versions are left open here because Owner D owns the pinned lockfile
+# (task D7.1, io_rules.md section 9). Pin from this list, do not pin here.
+
+pandas
+pytest
+
+# Optional: normalise.double_metaphone falls back to a built-in reduction when
+# this is absent, so nothing hard-depends on it (task A2.7).
+metaphone
