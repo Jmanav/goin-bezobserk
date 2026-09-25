@@ -203,17 +203,27 @@ class BlockingHarness:
         return self
 
     def query(self, frag_frame):
+        import time as _t
+        _s = _t.time()
         ids, records = _records(frag_frame)
+        self._normalise_seconds = _t.time() - _s
         names = [records[i].name_norm for i in ids]
         blobs = [f"{records[i].name_norm} {records[i].addr_norm}".strip() for i in ids]
 
-        channels = [self.char.query(ids, names), self.bm25.query(ids, blobs),
-                    self.keys.query(records)]
+        import time as _t
+        self.timings = {"normalise": getattr(self, "_normalise_seconds", 0.0)}
+        _s = _t.time(); c_char = self.char.query(ids, names); self.timings["char_tfidf"] = _t.time() - _s
+        _s = _t.time(); c_bm25 = self.bm25.query(ids, blobs); self.timings["bm25"] = _t.time() - _s
+        _s = _t.time(); c_keys = self.keys.query(records); self.timings["keys"] = _t.time() - _s
+        channels = [c_char, c_bm25, c_keys]
         if self.dense is not None:
-            channels.append(self.dense.query(ids, blobs))
+            _s = _t.time(); channels.append(self.dense.query(ids, blobs)); self.timings["dense"] = _t.time() - _s
 
-        always = self.keys.confident_hits(records)
+        import time as _t
+        _s = _t.time(); always = self.keys.confident_hits(records); self.timings["confident_hits"] = _t.time() - _s
+        _s = _t.time()
         fused = blocking.reciprocal_rank_fusion(channels, k=self.k, always_keep=always)
+        self.timings["rrf_fusion"] = _t.time() - _s
         return fused, channels, always
 
     @property

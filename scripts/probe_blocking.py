@@ -120,6 +120,12 @@ def main():
         "projected_hours_full_test_1_73M_s1_x_9_97M_frags":
             round(query_s / max(len(frags) * len(s1), 1)
                   * 9_969_589 * 1_732_544 / 3600, 1),
+        # Per-stage wall clock. Two earlier diagnoses were wrong because they
+        # reasoned from profiles of isolated components instead of measuring the
+        # real run, so the harness now reports where its time actually goes.
+        "stage_seconds": {k: round(v, 1)
+                          for k, v in sorted(getattr(harness, "timings", {}).items(),
+                                             key=lambda kv: -kv[1])},
         "channels": {
             ch.name: {
                 "fragments_with_a_hit": sum(1 for v in ch.hits.values() if v),

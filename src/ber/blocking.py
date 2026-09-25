@@ -37,7 +37,13 @@ KEY_COLLISION_CAP = 200
 # A token in more than this share of S1 documents is dropped from BM25
 # retrieval: it matches almost everything, so it densifies the sparse product
 # without discriminating between candidates.
-MAX_DF_SHARE = 0.30
+#
+# 0.30 was measured on synthetic data and turned out to be far too lenient for
+# real business text, where the highest-DF tokens ("traders", "enterprises",
+# "city", "shree") sit around 19% and only 2 of 51,030 terms exceeded 30%. At
+# 0.05 the common descriptors research.md 3.1 names are actually caught. Set to
+# None to disable.
+MAX_DF_SHARE = 0.05
 MIN_DOCS_FOR_DF_PRUNING = 1000
 KEY_HIT_MAX_COLLISIONS = 5
 
