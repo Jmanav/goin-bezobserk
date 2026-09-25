@@ -219,3 +219,43 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def audit_json(frames, truth=None, s1_df=None, train_frames=None, gt_path=None):
+    """Return the section 10 audit as a plain JSON-able dict.
+
+    Same probes as run(), but returned rather than printed, so the numbers can
+    be copied out of a notebook. Report only: nothing here mutates or filters.
+    """
+    out = {
+        "scale": audit.scale_report(frames),
+        "literal_na_counts": audit.literal_na_counts(frames),
+        "namespace_problems": safe_io.check_namespace(frames, raise_on_fail=False),
+        "country_report": audit.country_report(frames),
+        "script_census": audit.script_census(frames),
+        "placeholders": audit.placeholder_report(frames),
+    }
+    if train_frames is not None:
+        out["labels_in_test_not_train"] = sorted(
+            audit.unseen_test_labels(train_frames, frames)
+        )
+    if gt_path is not None:
+        out["ground_truth_shape"] = audit.ground_truth_shape(gt_path)
+
+    if truth is not None:
+        multi = audit.fragments_in_multiple_s1(truth)
+        _, maxima = audit.per_vendor_match_counts(truth)
+        out["structure"] = {
+            "n_fragments_in_multiple_s1": len(multi),
+            "example_violations": dict(list(multi.items())[:5]),
+            "q3_asymmetric_framing_holds": not multi,
+            "max_matched_per_s1_per_vendor": maxima,
+            "q4_within_vendor_1to1_holds": all(v <= 1 for v in maxima.values()),
+        }
+        out["cardinality"] = audit.cardinality_report(truth)
+        out["orphans"] = audit.orphan_report(
+            truth, {k: v for k, v in frames.items() if k != "S1"}
+        )
+        if s1_df is not None:
+            out["cardinality_by_country"] = audit.cardinality_by_country(truth, s1_df)
+    return out

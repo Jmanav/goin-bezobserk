@@ -213,28 +213,35 @@ def orphan_report(truth, frag_frames):
 # --- A0.6 script census, A4.2 placeholder discovery -------------------------
 
 
-def script_census(frames):
+def script_census(frames, sample=None):
     """Non-Latin character census per country (A0.6, research.md section 3.1).
 
     Rule-based transliteration is only added if a non-Latin script actually
-    appears and the library ships no external dictionaries.
+    appears and the library ships no external dictionaries. Vectorised, since
+    this runs over every row of a multi-million-row source; pass `sample` to cap
+    rows per source (reported as `n_sampled`) when a full pass is too slow.
     """
     out = {}
     for source, df in frames.items():
+        n_total = len(df)
+        if sample is not None and n_total > sample:
+            df = df.sample(n=sample, random_state=0)
+        blob = df["business_name"].astype(str) + " " + df["business_address"].astype(str)
+        key = df["country"].map(normalise_country)
+        flags = blob.map(script_flag)
+        non_ascii = blob.map(has_non_ascii)
+
         per_country = {}
-        for row in df.itertuples(index=False):
-            key = normalise_country(row.country)
-            entry = per_country.setdefault(
-                key, {"n": 0, "n_non_ascii": 0, "scripts": Counter()}
-            )
-            entry["n"] += 1
-            blob = f"{row.business_name} {row.business_address}"
-            if has_non_ascii(blob):
-                entry["n_non_ascii"] += 1
-            entry["scripts"][script_flag(blob)] += 1
-        out[source] = {
-            k: {**v, "scripts": dict(v["scripts"])} for k, v in per_country.items()
-        }
+        for country, idx in key.groupby(key).groups.items():
+            per_country[country] = {
+                "n": int(len(idx)),
+                "n_non_ascii": int(non_ascii.loc[idx].sum()),
+                "scripts": {k: int(v) for k, v in flags.loc[idx].value_counts().items()},
+            }
+        if sample is not None and n_total > sample:
+            for entry in per_country.values():
+                entry["n_sampled_from"] = n_total
+        out[source] = per_country
     return out
 
 
@@ -278,3 +285,49 @@ def literal_na_counts(frames):
 def scale_report(frames):
     """Rows per source, to finalise the research.md section 6 estimates."""
     return {source: len(df) for source, df in frames.items()}
+
+
+def cardinality_by_country(truth, s1_df):
+    """Singleton rate and t-buckets per country (audit #4, #5 per country).
+
+    research.md section 1.2 makes the singleton rate the single biggest lever on
+    the score, and section 1.4 warns that France behaves differently -- so the
+    overall rate is not enough on its own.
+    """
+    country_of = dict(zip(s1_df["entity_id"], s1_df["country"]))
+    per_country = {}
+    for s1_id, frag_ids in truth.items():
+        key = normalise_country(country_of.get(s1_id, ""))
+        entry = per_country.setdefault(
+            key, {"n_s1": 0, "t=0": 0, "t=1": 0, "t=2-4": 0, "t>=5": 0}
+        )
+        entry["n_s1"] += 1
+        t = len(frag_ids)
+        if t == 0:
+            entry["t=0"] += 1
+        elif t == 1:
+            entry["t=1"] += 1
+        elif t <= 4:
+            entry["t=2-4"] += 1
+        else:
+            entry["t>=5"] += 1
+
+    for entry in per_country.values():
+        entry["singleton_rate"] = entry["t=0"] / (entry["n_s1"] or 1)
+    return per_country
+
+
+def ground_truth_shape(path):
+    """Report the on-disk shape of a ground-truth TSV without assuming one.
+
+    io_rules.md does not pin this file's format, so the row count is reported
+    alongside the distinct-key count: equal means one row per S1 (the section
+    5.1 list shape), more rows than keys means the pairwise shape.
+    """
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    with open(path, "r", encoding="utf-8", newline="") as handle:
+        header = handle.readline().rstrip("\n").rstrip("\r")
+        n_data_lines = sum(1 for _ in handle)
+    return {"path": str(path), "header": header.split("\t"), "n_data_rows": n_data_lines}
