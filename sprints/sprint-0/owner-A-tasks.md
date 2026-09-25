@@ -11,7 +11,7 @@ Owner A area: Normalisation / data audit / rule lists (US, IN, FR) — roadmap.m
 
 These are **decisions/confirmations**, not code. Do not write dependent code paths until each is resolved. Every item is a `[VERIFY]` carried from research.md / io_rules.md.
 
-- [ ] **A0.1 — Offline parser ruling (Q2, research.md §11 + §3.1 + io_rules.md §9).** Send a written query to organisers: does an offline gazetteer-backed parser (libpostal — code MIT, model data derived from OSM/OpenAddresses/GeoNames, licence unclear) count as "external data"? **Default assumption until answered: YES → excluded.** deepparse (LGPL-3.0) excluded regardless. Owner A per research.md §11.
+- [x] **A0.1 — Offline parser ruling (Q2, research.md §11 + §3.1 + io_rules.md §9). RESOLVED: libpostal is NOT usable.** Gazetteer-backed parsers (libpostal — model data derived from OSM/OpenAddresses/GeoNames) count as external data and are excluded. deepparse (LGPL-3.0) excluded regardless. Address parsing stays regex-only per research.md §3.1 ("regex plus a small CRF/token tagger trained only on the provided training addresses"). No further action; this is no longer a blocking question.
   - Blocks: any address-parsing implementation choice beyond regex (A3). Until resolved, build regex-only per research.md §3.1 ("Recommendation: regex plus a small CRF/token tagger trained only on the provided training addresses if needed").
 - [ ] **A0.2 — Fragments map to ≤ 1 S1? (Q3, research.md §11 + §1.1 + audit #3).** Cannot be confirmed on real data pre-event; confirm on **proxy data generator invariants** now and re-run on real train at H0–6. Default assumption: YES. Expect 0 fragments whose ID appears in more than one S1 ground-truth row.
 - [ ] **A0.3 — Within-vendor 1:1 per S1? (Q4, research.md §11 + §1.1 + audit #3).** For each S1 entity, count matched S2 IDs and matched S3 IDs **separately**; if max is 1, the within-vendor one-to-one constraint holds. Default: **Unknown.**
@@ -28,7 +28,7 @@ Implementation is done (A1–A5, `src/ber/`, 54 tests). What the **proxy** audit
 
 | Probe | Proxy result | Still needed |
 |---|---|---|
-| A0.1 offline parser | n/a | **unresolved** — address parsing is regex-only, libpostal excluded by default |
+| A0.1 offline parser | n/a | **RESOLVED — excluded.** Address parsing is regex-only. A CRF trained only on provided addresses is the sole escalation path (Sprint 2+, only if the audit shows regex leaving signal) |
 | A0.2 fragment → ≤ 1 S1 | HOLDS (0 multi-owned) | re-run on real train at H0–6 |
 | A0.3 within-vendor 1:1 | **does NOT hold** (max 2/vendor) | tell Owner D: keep N2 bipartite branch **off** (D5.3) |
 | A0.4 singleton/orphan rates | parameterised knob, not baked in | real rates unknown until H0–6 |
@@ -60,7 +60,7 @@ Inputs/outputs fixed by research.md §3.1 — the output field list is a contrac
 - [x] **A2.2 — Unicode layer** (research.md §3.1): NFKC → casefold → an accent-folded **copy** (keep **both**; "Société Générale" vs "Societe Generale"). Normalise punctuation variants (`’ ' \` “ ”`) and ampersands (`&` ↔ `and`/`et`).
 - [x] **A2.3 — Token IDF computation** (research.md §3.1 + §3.3): compute each token's document frequency in **S1** names. Needed by C's IDF features and B's rare-name-token key.
 - [x] **A2.4 — Descriptor down-weighting (learned, not hard-coded)** (research.md §3.1): tokens above a DF percentile ("restaurant", "pharmacy", "store", "traders") get **down-weighted by IDF rather than deleted**. Learn from training positives which tokens often *differ* between matched pairs (vendors appending "Store"/"Branch").
-- [x] **A2.5 — Address number/unit extraction (regex only)** (research.md §3.1): house number, units (`Ste 200`, `Flat 3B`, `#12`, `Apt`), US ZIP (5 or 9 digits), India PIN (6 digits), France postcode (5 digits, `CEDEX`). Regex-based — gated by A0.1, so no gazetteer-backed parser.
+- [x] **A2.5 — Address number/unit extraction (regex only)** (research.md §3.1): house number, units (`Ste 200`, `Flat 3B`, `#12`, `Apt`), US ZIP (5 or 9 digits), India PIN (6 digits), France postcode (5 digits, `CEDEX`). Regex-based. A0.1 resolved: no gazetteer-backed parser, so this regex path is final, not provisional.
 - [x] **A2.6 — Landmark phrase tagging** (research.md §3.1): `near`, `opp`, `opposite`, `behind`, `beside`, `nr`, `b/h`, `next to`, `en face de`, `près de` → `landmark_flag`.
 - [x] **A2.7 — Phonetic key** (research.md §3.1 + §3.2 Keys row): Double Metaphone of `name_core`. Algorithmic, not a data lookup. Feeds B's `(Double Metaphone of name_core, postcode prefix)` key.
 
@@ -100,7 +100,7 @@ Hand-written rule lists are **domain knowledge, not an external lookup** — but
 - [ ] **Source is prefix + which file the record came from** (§2) — there is no `source` column.
 - [ ] **Country is an open set of string labels** (§3, §8): do not hard-code, filter, or one-hot to `{US, India}`. Unseen/missing country must still flow through the full pipeline and appear in the submission. Use an explicit `"other/unseen"` bucket, never a US/India-only branch. Normalise casing but **keep the label**.
 - [ ] **Placeholder detector sets a `missing` flag and never creates matches** (§4): no two records match *because* they share a placeholder. Empty address ≠ match signal.
-- [ ] **No external data** (§9): no registries, geocoders, ER APIs, scraped lists. Hand-written rule lists are documented as domain knowledge. Offline gazetteer-backed parsers (libpostal) treated as external data by default — blocked on A0.1.
+- [x] **No external data** (§9): no registries, geocoders, ER APIs, scraped lists. Hand-written rule lists are documented as domain knowledge. Offline gazetteer-backed parsers (libpostal, deepparse) are **external data and excluded** — A0.1 resolved, not a default.
 - [ ] **Reproducible from raw TSV** (§9): fixed seeds, pinned deps; the normaliser must be deterministic.
 
 ---
