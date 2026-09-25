@@ -1,6 +1,6 @@
 # Progress log — Sprint 0
 
-Last updated 2026-09-25. **103 tests passing** (63 Owner A, 40 Owner D).
+Last updated 2026-09-25. **129 tests passing** (63 Owner A, 26 Owner B, 40 Owner D).
 
 Records what is built, what the real data actually says, and what is still open.
 For the task breakdowns see `sprints/sprint-0/`; for the plan see `docs/`.
@@ -98,6 +98,85 @@ with `n_data_rows == n_distinct_s1 == 2,206,821`: the io_rules.md §5.1 list
 shape, one row per S1. So **io_rules.md §5.2 is right and research.md §11 Q7's
 competing "two columns" default is wrong**. `candidate_pairs.tsv` uses the list
 shape.
+
+### 1.6 Blocking measured on real data — Gate 1 target met at K=5
+
+`scripts/probe_blocking.py`, S1-first samples of real train, all four channels
+with the dense channel active on a Colab T4.
+
+| run | S1 indexed | fragments queried | PC | entity ceiling | F0.5 ceiling |
+|---|---|---|---|---|---|
+| 5k, e5-small | 5,000 | 22,375 | 0.99983 | 0.9994 | 0.99996 |
+| 50k, e5-large | 50,000 | 222,558 | 0.99921 | 0.99732 | 0.99977 |
+
+**research.md §3.2's Gate 1 target (PC ≥ 99% at K ≤ 30) is met at K=5.** The
+blocking problem is far easier than the plan assumed, which frees Sprint 1 to
+spend its time on scoring precision instead of recall.
+
+Two things follow, and both change plans:
+
+**Channel contribution is lopsided.** On the 50k run:
+
+| channel | fragments reached | hits per fragment |
+|---|---|---|
+| dense | 100.0% | 50.0 |
+| bm25 | 99.9% | 49.8 |
+| char_tfidf | 93.2% | 40.5 |
+| **keys** | **4.0%** | **0.1** |
+
+The exact-key channel reaches 4% of fragments. research.md §3.2 treats keys as
+"exact anchors" and §3.2's fusion rule grants them a standing exemption from the
+top-K cut; at 4% reach that exemption is nearly inert. The likely cause is that
+`(postcode, house#)` needs both a parsed postcode *and* a house number, and the
+A0.1 ruling left address parsing regex-only. Worth an ablation before investing
+further in keys.
+
+**K can come down, which matters for compute.** Cost per K at 10M test
+fragments, against the measured ceiling:
+
+| K | PC | entity ceiling | pairs to featurise | ceiling loss |
+|---|---|---|---|---|
+| 10 | 0.9977 | 0.9925 | 100M | 0.0075 |
+| 15 | 0.9986 | 0.9954 | 150M | 0.0046 |
+| 20 | 0.9990 | 0.9967 | 200M | 0.0033 |
+| 25 | 0.9992 | 0.9973 | 250M | 0.0027 |
+
+Going from K=25 to K=15 costs 0.0019 of ceiling and saves 100M pairs of Stage-A
+featurisation. On a $200 budget that trade is probably worth taking; it is
+Sprint 1's call, but the numbers now exist to make it.
+
+**India no longer lags US.** 0.99862 vs 0.99959 pair completeness — a 0.001 gap,
+where the Indic-script bugs (§2.1, §2.2, §2.5) would have produced a chasm. The
+dense channel reaching 100% of fragments is what closes it.
+
+### 1.7 Blocking runtime is the real Sprint 1 blocker
+
+Scaling from the 5k run to the 50k run: S1 grew 10x and fragments 9.9x, but
+query time grew **58x**, not 9.9x. Cost scales with S1 x fragments, because every
+fragment is scored against the whole S1 index.
+
+Extrapolated to the real test run (1.73M S1 index, 9.97M fragments):
+
+| | value |
+|---|---|
+| measured | 1,837 s for 222,558 fragments against 50k S1 |
+| per fragment-S1 unit | 1.65e-7 s |
+| **full test, single process** | **~792 h (33 days)** |
+
+research.md §6 budgets char-TF-IDF at 30–90 min CPU / 10–20 min GPU. **The
+measured path is about three orders of magnitude over that budget**, and the
+probe's own `projected_minutes_for_10M_fragments` (236 min) is wrong because it
+extrapolates linearly in fragments while the true cost is quadratic.
+
+This is now the top Sprint 1 item. Options, cheapest first:
+
+1. **GPU the sparse channels.** §3.2 already names cuML/cupy and
+   `sparse_dot_topn`; the current implementation is pure scipy on CPU.
+2. **Let the dense channel carry retrieval.** It reaches 100% of fragments on
+   its own and FAISS is already GPU-backed. Sparse then re-ranks a shortlist
+   rather than scanning the full index — the SIGMOD-2022 recipe in §2.3.
+3. **Shard the S1 index.** Blocked on B0.1 (cross-country matches), and it must
+   never exclude unseen labels.
 
 ---
 
@@ -202,7 +281,18 @@ pass: the 0.5 single-candidate break-even, and rejection of a second candidate a
 do not thin out at the 0.02 floor, so **Owner B's candidate quality directly
 affects decode time**.
 
-### Owner B — 1/41 tasks. Owner C — 0/56 tasks. Not started.
+### Owner B — 25/41 tasks, 26 tests
+
+| module | purpose |
+|---|---|
+| `blocking.py` | char TF-IDF, scipy BM25, exact keys, RRF fusion |
+| `dense.py` | FAISS + multilingual encoder, optional imports, licence record |
+| `blocking_report.py` | PC / RR / per-entity ceiling / slices, harness entry point |
+
+Measured on real data — see §1.6. Gate 1's PC target is met at K=5; runtime is
+the open problem (§1.7).
+
+### Owner C — 0/56 tasks. Not started.
 
 ---
 
@@ -225,7 +315,8 @@ affects decode time**.
 | Q8 | Can test text be used unsupervised (DAPT)? | Owner C |
 | Q10 | Public LB fraction / submission limit | Leaderboard hygiene |
 | Q11 | Scorer whitespace / ordering | Assumed order-insensitive, trimmed |
-| — | §6 compute table vs real 24M scale | Owner B's choice of K |
+| — | §6 compute table vs real 24M scale | **Measured: blocking is ~33 days single-process at full scale, ~1000x over the §6 budget.** Top Sprint 1 item (§1.7) |
+| Q6 / B0.1 | Cross-country matches exist? | Country sharding stays off |
 
 ---
 

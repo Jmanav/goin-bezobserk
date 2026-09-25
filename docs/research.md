@@ -49,7 +49,7 @@ Consequences (derived, exact):
 | 4 | {3 correct} | 3 | 3 | 3.75/4 = 0.9375 |
 
 What this means:
-- **Singletons are all-or-nothing.** A true singleton predicted as empty earns a free 1.0; one spurious link costs the full 1.0. If, say, 40% of S1 rows are singletons (an unknown to [VERIFY]), the singleton decisions alone swing up to 0.40 of the leaderboard score.
+- **Singletons are all-or-nothing.** A true singleton predicted as empty earns a free 1.0; one spurious link costs the full 1.0. **[MEASURED 2026-09-25 — this assumption was wrong.]** The real singleton rate is **5.58%**, not the ~40% this paragraph hypothesised, so singleton decisions swing ~0.056 of the score rather than ~0.40. The real distribution is t=0 5.58%, t=1 5.40%, **t=2-4 63.0%**, **t>=5 26.0%**, mean t=3.46, max 11, and US/India are near-identical (5.583%/5.588%). This is a **many-matches** problem: the empty set is the wrong answer for 94% of rows, so the decoder is mostly choosing a set *size*. Precision pressure lives in the t=2-4 band, where missing one match costs 0.167 and adding one wrong costs 0.286.
 - **Asymmetry in numbers:** for t = 2, missing one match costs 0.167, while adding one wrong match to a correct pair costs 0.286. For t = 1, adding a wrong match costs 0.444.
 - **Rows are macro-averaged**, so a large cluster counts the same as a singleton. Getting 3 of 4 right on a big entity (0.9375) is worth less than one correctly empty singleton (1.0).
 
@@ -95,7 +95,7 @@ So the second candidate at 0.5 is rejected. Once one match is already predicted,
 **Setting.** Product listings matched by image and title; per-item F1.
 **What worked (verified from public solution repos):** ArcFace (ArcMarginProduct) metric-learning heads on image and text encoders, KNN in embedding space, and a cosine threshold. Two widely used post-processing tricks were "min2" (always predict at least two items, since each item's group contains itself) and INB (iterative neighbourhood blending, a form of query expansion). One public reproduction reports test F1 of 0.8211 → 0.8285 after min2 → 0.8345 after INB.
 **Transfer:** metric learning for the dense blocking encoder; threshold tuning on CV.
-**Reject:** "min-k" forcing. Its equivalent here, "always predict at least one," would zero every true singleton. Use INB-style neighbourhood expansion only as a *candidate-generation* feature (see N3), never as a decision rule.
+**Reject:** "min-k" forcing. Its equivalent here, "always predict at least one," would zero every true singleton. **[MEASURED: this argument is much weaker than written.]** At a 5.58% singleton rate it costs ~0.056, not ~0.40. The conclusion is probably still right, but it must be **re-derived on CV rather than inherited from this paragraph**. Use INB-style neighbourhood expansion only as a *candidate-generation* feature (see N3), never as a decision rule.
 
 ### 2.3 SIGMOD Programming Contests (2020–2022)
 - **2022 (blocking):** submissions were ranked by average recall at a fixed candidate budget; the output file had to contain 3,000,000 pairs, 1M for X1 and 2M for X2, with running time as a tiebreaker. The winner was team WBSG (Brinkmann and Peeters, Mannheim), out of 55 teams. They embedded records with a transformer pre-trained by supervised contrastive learning, indexed the embeddings in FAISS, ran nearest-neighbour search, and **re-ranked the retrieved pairs with a symbolic similarity metric**.
@@ -152,7 +152,7 @@ So the second candidate at 0.5 is rejected. Once one match is already predicted,
 - **Descriptor stripping (learned, not hard-coded):** compute each token's document frequency in S1 names. Tokens above a DF percentile (e.g., "restaurant", "pharmacy", "store", "traders") get down-weighted by IDF rather than deleted. Learn from training positives which tokens often *differ* between matched pairs, e.g., vendors appending "Store" or "Branch".
 - **Addresses:** rule-based extraction of numbers, units ("Ste 200", "Flat 3B", "#12", "Apt"), US ZIP (5 or 9 digits), India PIN (6 digits), France postcode (5 digits, "CEDEX"). Tag landmark phrases ("near", "opp", "opposite", "behind", "beside", "nr", "b/h", "next to", "en face de", "près de"). Expand abbreviations (St↔Street, Rd↔Road, Ave↔Avenue, Bd/Blvd↔Boulevard, Nagar, Marg).
 - **Parsers:** libpostal is an MIT-licensed C library whose parser was trained on over 1B OSM/OpenAddresses examples, with a reported 99.45% full-parse accuracy on held-out data. It also uses GeoNames as a place-name and postcode gazetteer, and its model data licence is not clearly stated. **[VERIFY] ruling:** because the model bundles knowledge derived from external geographic data (gazetteers of places and postcodes), a strict reviewer could call it "external data." Conservative default: **do not use libpostal or any gazetteer-backed parser in the scored pipeline** unless organisers confirm in writing. deepparse is LGPL-3.0, which is not MIT/Apache; avoid it for the same reasons. usaddress and pyap are rule/CRF-based and US-centric; their licences are unverified here, so check them before use. Recommendation: regex plus a small CRF/token tagger **trained only on the provided training addresses** if needed.
-- **Transliteration:** Indian names show spelling variants (Shri/Shree/Sri, Enterprises/Ent., Aggarwal/Agarwal). Handle them with character n-gram similarity and a phonetic key (Double Metaphone); both are algorithmic, not data. If any Devanagari script appears [VERIFY: count non-Latin characters per country], add a rule-based transliteration only if the library ships no external dictionaries.
+- **Transliteration:** Indian names show spelling variants (Shri/Shree/Sri, Enterprises/Ent., Aggarwal/Agarwal). Handle them with character n-gram similarity and a phonetic key (Double Metaphone); both are algorithmic, not data. **[MEASURED 2026-09-25 — larger and broader than anticipated.]** 41.3% of S2 and 32.4% of S3 India rows carry non-Latin script (41.7%/32.9% on test, so no train->test shift), spanning **at least six scripts**: Devanagari, Malayalam, Gujarati, Tamil, Telugu, Bengali. Two patterns: a fully transliterated name (zero char-n-gram overlap with a Latin S1 record, and Double Metaphone is Latin-only, so **only the dense channel bridges these**), and a Latin name with a native-script state in the address tail. Consequences for this plan: legal suffixes are transliterated too, so the suffix lists need native-script entries; Indic vowel signs and the virama are Unicode categories Mn/Mc and must survive punctuation stripping; zero-width characters (U+200C) appear in Telugu names and must be deleted, not blanked, or they split words.
 
 ### 3.2 Blocking (target ≥99% pair completeness, small K)
 **Direction:** query = each S2/S3 fragment, index = S1. This matches the many-to-one structure and bounds candidates per fragment.
@@ -167,7 +167,10 @@ So the second candidate at 0.5 is rejected. Once one match is already predicted,
 - **Dense fine-tuning:** contrastive (MultipleNegativesRankingLoss) on training (fragment, S1) positives, with **S1-sibling hard negatives** (see N4). The SIGMOD 2022 winner's recipe was contrastive pre-training plus FAISS plus a symbolic re-rank.
 - **Country handling:** use country as a *soft* feature and a shard key only if cross-country matches are verified to be 0 in training [VERIFY]. Never filter unknown country values: France fragments must query France S1 records, and anything with an unseen or missing label must query the whole index.
 - **Audit metrics** (report per country, vendor and fold): Pair Completeness PC = |C ∩ M| / |M|; Reduction Ratio RR = 1 − |C| / (|S1| × |S2 ∪ S3|); plus the PC-vs-K curve and the distribution of candidates per fragment. The **recall ceiling of the final score** is per-entity. Also report the share of S1 rows whose full true set lies inside C.
-- **Go/no-go:** PC ≥ 99.0% at K ≤ 30 on grouped CV. If the dense channel adds less than 0.3 points of PC over sparse + keys, drop it from blocking (keep it as a feature).
+- **Go/no-go:** PC ≥ 99.0% at K ≤ 30 on grouped CV. ~~If the dense channel adds less than 0.3 points of PC over sparse + keys, drop it from blocking (keep it as a feature).~~ **[MEASURED — do not apply this rule as written.]** 41% of S2 India names are non-Latin, where sparse channels retrieve *nothing*; a pooled PC delta would hide that behind the US majority. The dense channel is **mandatory**. If this rule is evaluated at all, evaluate it per country.
+- **[MEASURED 2026-09-25] Blocking results on real train** (`scripts/probe_blocking.py`, S1-first samples, dense active): PC **0.99983** at 5k S1 / 22k fragments, **0.99921** at 50k S1 / 223k fragments; per-entity ceiling 0.9994 and 0.9973. **The Gate 1 target is met at K=5**, so blocking is far easier than this section assumed and Sprint 1 should spend its budget on scoring precision, not recall. India no longer lags US (0.99862 vs 0.99959).
+- **[MEASURED] The exact-key channel reaches only 4.0% of fragments** (0.1 hits/fragment). The "all key hits with <= 5 collisions" exemption in the Fusion row is therefore nearly inert. Likely cause: `(postcode, house#)` needs both a parsed postcode and a house number, and the Q2 ruling left address parsing regex-only. Ablate before investing further.
+- **[MEASURED] K can be reduced.** At 10M test fragments, K=25 costs 250M pairs for a ceiling of 0.9973; K=15 costs 150M for 0.9954. Trading 0.0019 of ceiling for 100M fewer pairs of Stage-A featurisation is likely worth it on a $200 budget.
 
 ### 3.3 Pair scoring
 **Stage A, LightGBM** (start: `num_leaves = 255`, `learning_rate = 0.05`, `min_data_in_leaf = 100`, `feature_fraction = 0.7`, early stopping on grouped CV; Foursquare 7th place found much larger trees helped at 1.5M-row scale, so tune upward). Features:
@@ -294,7 +297,25 @@ Gains are **my estimates** of macro-F0.5 points over a strong GBDT + global-thre
 ---
 
 ## 6. Compute & runtime plan (all numbers are estimates)
-Assumption [VERIFY]: 1.3 GB at about 150 bytes per row suggests roughly 8–9M rows in total, e.g., 1–3M S1 and 5–7M fragments. Rescale after the audit.
+~~Assumption [VERIFY]: 1.3 GB at about 150 bytes per row suggests roughly 8-9M rows in total, e.g., 1-3M S1 and 5-7M fragments.~~
+
+**[MEASURED 2026-09-25] The real scale is ~24M rows, roughly 3x this estimate:**
+S1 2,206,821 train / 1,732,544 test; S2 5,034,616 / 4,887,273; S3 5,285,603 / 5,082,316.
+
+**[MEASURED] The char-TF-IDF row below is wrong by about three orders of
+magnitude.** Scaling the blocking harness from 5k to 50k S1 (fragments x9.9)
+raised query time **x58**, because cost scales with S1 x fragments: every
+fragment is scored against the whole S1 index. At 1.65e-7 s per fragment-S1
+unit, the full test run is **~792 h (33 days) single-process**, against the
+30-90 min CPU / 10-20 min GPU budgeted in the table. Any linear-in-fragments
+projection understates this badly.
+
+Fixes, cheapest first: (1) move the sparse channels to GPU (cuML/cupy or
+`sparse_dot_topn`, both already named in section 3.2 -- the current
+implementation is pure scipy on CPU); (2) let the FAISS dense channel carry
+retrieval, since it reaches 100% of fragments alone, and use sparse only to
+re-rank a shortlist (the SIGMOD-2022 recipe in section 2.3); (3) shard the S1
+index, which is blocked on Q6 and must never exclude unseen labels.
 | Stage | Hardware | Time (est.) | Memory (est.) |
 |---|---|---|---|
 | Read + normalise (Polars) | 16–32 vCPU | 5–15 min | 10–20 GB |
@@ -386,12 +407,12 @@ Budget reality: the AWS Builder Center prep guide says every participant gets **
 | # | Question | Default assumption | Owner | Resolve by |
 |---|---|---|---|---|
 | Q1 | Real timeline & team cap | 25 Sep 2026 9:00 AM IST – 27 Sep 2026 9:00 PM IST (Internshala); 2–4 members per Unstop vs 3–4 per Internshala | D | read official rules today |
-| Q2 | Is an offline parser (libpostal) "external data"? | Yes → excluded | A | written query to organisers |
-| Q3 | Fragments map to ≤ 1 S1? | Yes | A | audit #3 |
-| Q4 | Within-vendor 1:1 per S1? | Unknown | A | audit #3 |
-| Q5 | Singleton & orphan rates | Unknown | A | audit #4, #6 |
+| Q2 | Is an offline parser (libpostal) "external data"? | **RESOLVED: yes → excluded.** Address parsing is regex-only and final | A | resolved 2026-09-25 |
+| Q3 | Fragments map to ≤ 1 S1? | Holds on proxy; re-confirm on real train | A | audit #3 |
+| Q4 | Within-vendor 1:1 per S1? | **RESOLVED: does NOT hold** → N2 bipartite branch stays off | A | resolved 2026-09-25 |
+| Q5 | Singleton & orphan rates | **RESOLVED: 5.58% singleton, mean t=3.46** (not ~40%) — see §1.2 | A | resolved 2026-09-25 |
 | Q6 | Cross-country matches exist? | No | B | audit #7 |
-| Q7 | candidate_pairs.tsv schema | two columns S1 ID, fragment ID | D | sample file/rules |
+| Q7 | candidate_pairs.tsv schema | **RESOLVED: io_rules.md §5.2 list shape** (one row per S1, comma-separated). The organiser's own ground-truth file confirms it; this row's old default was wrong | D | resolved 2026-09-25 |
 | Q8 | Can test text be used unsupervised (DAPT)? | Conservative: no | C | rules/organisers |
 | Q9 | "≤ 8B" counts total params incl. embeddings? | Yes → avoid Qwen3-8B | C | rules/organisers |
 | Q10 | Public LB fraction / submission limit | Unknown | D | platform |

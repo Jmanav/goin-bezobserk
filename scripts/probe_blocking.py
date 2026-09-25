@@ -112,8 +112,14 @@ def main():
         "fit_seconds": round(fit_s, 1),
         "query_seconds": round(query_s, 1),
         "seconds_per_1k_fragments": round(query_s / max(len(frags), 1) * 1000, 2),
-        "projected_minutes_for_10M_fragments":
-            round(query_s / max(len(frags), 1) * 10_000_000 / 60, 1),
+        # Cost scales with S1 x fragments, not fragments alone: every fragment is
+        # scored against the whole S1 index. A linear-in-fragments projection
+        # understates the full run by ~6x at these sample sizes.
+        "seconds_per_fragment_x_s1_unit":
+            query_s / max(len(frags) * len(s1), 1),
+        "projected_hours_full_test_1_73M_s1_x_9_97M_frags":
+            round(query_s / max(len(frags) * len(s1), 1)
+                  * 9_969_589 * 1_732_544 / 3600, 1),
         "channels": {
             ch.name: {
                 "fragments_with_a_hit": sum(1 for v in ch.hits.values() if v),
