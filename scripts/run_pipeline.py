@@ -126,12 +126,8 @@ def main():
         fs = {}
         blocking.reciprocal_rank_fusion(channels, k=K, always_keep=always,
                                         fused_scores=fs)
-        s1_recs = {r.entity_id: normalise_record(r.business_name,
-                                                 r.business_address, r.country)
-                   for r in s1.itertuples(index=False)}
-        fr_recs = {r.entity_id: normalise_record(r.business_name,
-                                                 r.business_address, r.country)
-                   for r in frags.itertuples(index=False)}
+        s1_recs = harness.s1_records
+        fr_recs = harness.fragment_records
         marginals = matcher.score_candidates(
             model, fused, fs, fr_recs, s1_recs, idf, ncc, adc)
         print(f"  scoring: {time.time()-t0:.1f}s  loaded {model_path} "
@@ -146,12 +142,9 @@ def main():
         fs = {}
         blocking.reciprocal_rank_fusion(channels, k=K, always_keep=always,
                                         fused_scores=fs)
-        s1_recs = {r.entity_id: normalise_record(r.business_name,
-                                                 r.business_address, r.country)
-                   for r in s1.itertuples(index=False)}
-        fr_recs = {r.entity_id: normalise_record(r.business_name,
-                                                 r.business_address, r.country)
-                   for r in frags.itertuples(index=False)}
+        # Reuse the harness's normalised records instead of a second pass.
+        s1_recs = harness.s1_records
+        fr_recs = harness.fragment_records
         idf = featlib.token_idf([r.name_tokens for r in s1_recs.values()])
         ncc, adc = featlib.corpus_counts(s1_recs)
 
@@ -164,8 +157,10 @@ def main():
             train_frags = set(uniq[:int(len(uniq) * 0.7)])
             tr = [i for i, g in enumerate(groups) if g in train_frags]
             model = matcher.PairScorer().fit(X[tr], y[tr])
+            # Reuse the design matrix built for training: it already covers
+            # every candidate pair in `fused`, in the same order.
             marginals = matcher.score_candidates(
-                model, fused, fs, fr_recs, s1_recs, idf, ncc, adc)
+                model, fused, fs, fr_recs, s1_recs, idf, ncc, adc, X=X)
             matcher.save_scorer(model, model_path)
             matcher.save_index_stats(stats_path, idf, ncc, adc)
             print(f"  scoring: {time.time()-t0:.1f}s  backend={model.backend} "

@@ -180,6 +180,9 @@ class BlockingHarness:
 
     def fit(self, s1_frame):
         ids, records = _records(s1_frame)
+        # Retained so Owner C does not re-normalise the same rows: at 2.2M S1
+        # that is a second full pass for no gain.
+        self.s1_records = records
         names = [records[i].name_norm for i in ids]
         blobs = [f"{records[i].name_norm} {records[i].addr_norm}".strip() for i in ids]
 
@@ -206,6 +209,7 @@ class BlockingHarness:
         import time as _t
         _s = _t.time()
         ids, records = _records(frag_frame)
+        self.fragment_records = records
         self._normalise_seconds = _t.time() - _s
         names = [records[i].name_norm for i in ids]
         blobs = [f"{records[i].name_norm} {records[i].addr_norm}".strip() for i in ids]

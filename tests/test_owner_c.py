@@ -206,3 +206,20 @@ def test_loading_fails_loudly_on_a_feature_registry_change(tmp_path, monkeypatch
     monkeypatch.setattr(F, "FEATURE_NAMES", F.FEATURE_NAMES[:-1])
     with pytest.raises(ValueError, match="feature registry changed"):
         matcher.load_scorer(path)
+
+
+def test_reusing_the_design_matrix_gives_identical_scores():
+    """The training path already featurises every candidate pair, so
+    score_candidates recomputing them doubled the scoring stage for no gain."""
+    fused, fs, fr, s1, truth = _toy_training_set(150)
+    idf = F.token_idf([r.name_tokens for r in s1.values()])
+    ncc, adc = F.corpus_counts(s1)
+    X, y, _ = matcher.build_training_pairs(fused, fs, fr, s1, truth, idf, ncc, adc)
+    model = matcher.PairScorer(n_estimators=40).fit(X, y)
+
+    recomputed = matcher.score_candidates(model, fused, fs, fr, s1, idf, ncc, adc)
+    reused = matcher.score_candidates(model, fused, fs, fr, s1, idf, ncc, adc, X=X)
+    assert set(recomputed) == set(reused)
+    for frag in recomputed:
+        for s1_id, p in recomputed[frag].items():
+            assert reused[frag][s1_id] == pytest.approx(p, abs=1e-12)

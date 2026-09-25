@@ -125,15 +125,23 @@ class PairScorer:
 
 
 def score_candidates(scorer, fused, fused_scores, frag_records, s1_records,
-                     idf, name_core_counts, address_counts):
+                     idf, name_core_counts, address_counts, X=None):
     """Score every blocked pair, returning {fragment: {s1: probability}}.
 
     That is exactly the shape decode.pipeline_predictions takes as `marginals`,
     so the placeholder rank heuristic is replaced without touching the decoder.
+
+    Pass `X` to reuse a design matrix already built by build_training_pairs over
+    the same `fused` set: the training path featurises every candidate pair, and
+    recomputing them here doubled the cost of the whole scoring stage for no
+    gain. The row order is identical because both iterate `fused` in insertion
+    order.
     """
-    X, _, groups = build_training_pairs(
-        fused, fused_scores, frag_records, s1_records, truth=None,
-        idf=idf, name_core_counts=name_core_counts, address_counts=address_counts)
+    if X is None:
+        X, _, _ = build_training_pairs(
+            fused, fused_scores, frag_records, s1_records, truth=None,
+            idf=idf, name_core_counts=name_core_counts,
+            address_counts=address_counts)
     if len(X) == 0:
         return {}
     probs = scorer.predict(X)
