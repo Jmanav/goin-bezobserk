@@ -17,7 +17,7 @@ LEGAL_SUFFIXES = {
         "incorporated",
         "inc",
         "llc",
-        "l.l.c.",
+        "l l c",   # normalise_name maps "." to " ", so "l.l.c." can never match
         "corp",
         "co",
         "ltd",
@@ -27,8 +27,7 @@ LEGAL_SUFFIXES = {
     "IN": [
         "private limited",
         "pvt ltd",
-        "pvt. ltd.",
-        "(p) ltd",
+        "p ltd",   # "(p) ltd" after punctuation stripping
         "llp",
         "and sons",
         "enterprises",
@@ -39,7 +38,7 @@ LEGAL_SUFFIXES = {
         # fails to reach name_core on those rows. Transliterations of an English
         # legal form, not gazetteer entries (research.md 3.1 / 9).
         "प्राइवेट लिमिटेड",        # Devanagari (Hindi/Marathi)
-        "प्रा. लि.",                # Devanagari, abbreviated
+        "प्रा लि",                  # Devanagari, abbreviated (dots stripped by normalise_name)
         "പ്രൈവറ്റ് ലിമിറ്റഡ്",   # Malayalam
         "પ્રાઇવેટ લિમિટેડ",        # Gujarati
         "பிரைவேட் லிமிடெட்",     # Tamil

@@ -160,21 +160,40 @@ def _strip_legal_prefix(text):
     return text, None
 
 
+@lru_cache(maxsize=1)
+def _combined_suffix_pattern():
+    """One alternation over every suffix, longest first.
+
+    find_legal_suffixes previously ran one re.search per suffix: profiling showed
+    136,000 searches for 4,000 records (34 suffixes x 4 calls), which made it the
+    single largest cost in normalisation once the import bug was fixed. The
+    per-suffix pattern is kept for strip_legal_suffixes, which must remove them
+    one at a time; only detection is batched.
+    """
+    ordered = sorted(ALL_LEGAL_SUFFIXES, key=lambda s: (-len(s.split()), -len(s)))
+    alts = []
+    for suffix in ordered:
+        body = r"\.?[\s\-]+".join(re.escape(w) for w in suffix.split())
+        alts.append(r"(?P<s%d>%s\.?)" % (len(alts), body))
+    return re.compile(rf"(?:^|[\s\-])(?:{'|'.join(alts)})(?=[\s\-]|$)"), ordered
+
+
 def find_legal_suffixes(name_norm):
     """Return the legal suffixes present in a normalised name (A3.1, A3.2).
 
     Returned as a set so Owner C can compute agreement/conflict rather than
     relying on deletion (research.md 3.1: store suffixes as a *feature*).
+
+    Matching semantics are identical to strip_legal_suffixes -- words may be
+    separated by spaces or hyphens, since real vendor rows write
+    "Private-Limited" as often as the spaced form.
     """
+    pattern, ordered = _combined_suffix_pattern()
     found = set()
-    for suffix in ALL_LEGAL_SUFFIXES:
-        # Same matcher as strip_legal_suffixes, so detection and stripping can
-        # never disagree. A plain substring test with literal spaces missed
-        # "Private-Limited", which real vendor rows write as often as the
-        # spaced form -- detection returned nothing, so the stripper (which is
-        # handed only what was detected) never saw it either.
-        if re.search(_suffix_pattern(suffix), name_norm):
-            found.add(suffix)
+    for match in pattern.finditer(name_norm):
+        idx = match.lastindex
+        if idx is not None:
+            found.add(ordered[idx - 1])
     return found
 
 
@@ -218,8 +237,8 @@ def _suffix_pattern(suffix):
     addresses. Requiring a literal space missed those rows entirely.
     """
     parts = [re.escape(word) for word in suffix.split()]
-    body = r"[\s\-]+".join(parts)
-    return rf"(?:^|[\s\-]){body}(?=[\s\-]|$)"
+    body = r"\.?[\s\-]+".join(parts)
+    return rf"(?:^|[\s\-]){body}\.?(?=[\s\-]|$)"
 
 
 def apply_transliteration_variants(tokens):
@@ -343,6 +362,16 @@ def landmark_flag(addr_norm):
 # --- A2.7 phonetic key -------------------------------------------------------
 
 
+# Resolved once at import. Doing this inside double_metaphone meant every record
+# triggered a failed module search across sys.path: profiling 4000 records showed
+# nt.stat + find_spec at 15.8s of 26.9s total, i.e. 59% of normalisation spent
+# re-discovering that an optional package is absent.
+try:
+    from metaphone import doublemetaphone as _DOUBLEMETAPHONE
+except ImportError:
+    _DOUBLEMETAPHONE = None
+
+
 def double_metaphone(text):
     """Phonetic key for `name_core` (A2.7).
 
@@ -351,11 +380,9 @@ def double_metaphone(text):
     available and falls back to a conservative built-in reduction otherwise, so
     the pipeline never hard-depends on an optional wheel in Colab.
     """
-    try:
-        from metaphone import doublemetaphone
-    except ImportError:
+    if _DOUBLEMETAPHONE is None:
         return _fallback_phonetic(text)
-    primary, secondary = doublemetaphone(text or "")
+    primary, secondary = _DOUBLEMETAPHONE(text or "")
     return primary or secondary or _fallback_phonetic(text)
 
 

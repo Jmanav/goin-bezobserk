@@ -6,6 +6,8 @@ that proves the guard fires.
 
 from __future__ import annotations
 
+import inspect
+
 import sys
 from pathlib import Path
 
@@ -527,3 +529,47 @@ def test_france_is_the_literal_label_seen_in_test_data():
     assert normalise.normalise_country(" FRANCE ") == "france"
     # never mapped to a closed set
     assert normalise.normalise_country("Atlantis") == "atlantis"
+
+
+def test_metaphone_lookup_is_resolved_once_not_per_record():
+    """Regression: `from metaphone import ...` sat inside double_metaphone, so
+    every record triggered a failed module search across sys.path. Profiling
+    4000 records showed nt.stat + find_spec at 15.8s of 26.9s -- 59% of
+    normalisation spent rediscovering that an optional package is absent."""
+    import ber.normalise as mod
+    assert hasattr(mod, "_DOUBLEMETAPHONE")
+    src = inspect.getsource(mod.double_metaphone)
+    assert "import" not in src, "optional import must not run per call"
+
+
+def test_dotted_and_bracketed_suffixes_are_detected():
+    """normalise_name maps "." to " ", so rule entries spelled with dots could
+    never match. The matcher now tolerates an optional trailing dot, and the
+    rule list stores the post-normalisation spelling."""
+    cases = {
+        "Acme L.L.C.": "l l c",
+        "Acme Pvt. Ltd.": "pvt ltd",
+        "Acme (P) Ltd": "p ltd",
+        "Acme Pvt Ltd": "pvt ltd",
+    }
+    for raw, expected in cases.items():
+        found = normalise.find_legal_suffixes(normalise.normalise_name(raw))
+        assert expected in found, (raw, sorted(found))
+
+
+def test_batched_suffix_detection_matches_per_suffix_matching():
+    """find_legal_suffixes batches all suffixes into one alternation for speed;
+    it must agree with the per-suffix matcher strip_legal_suffixes uses."""
+    import re
+    from ber.rules import ALL_LEGAL_SUFFIXES
+    samples = ["acme private limited", "brightleaf pvt ltd", "cafe lumiere sarl",
+               "acme hardware llc", "tirupati ensemble private-limited",
+               "plain name with no suffix"]
+    for text in samples:
+        batched = normalise.find_legal_suffixes(text)
+        one_by_one = {s for s in ALL_LEGAL_SUFFIXES
+                      if re.search(normalise._suffix_pattern(s), text)}
+        # batched keeps only the longest match at each site, so it is a subset
+        assert batched <= one_by_one, (text, batched - one_by_one)
+        for suffix in batched:
+            assert suffix in one_by_one
