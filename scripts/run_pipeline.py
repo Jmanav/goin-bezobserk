@@ -43,6 +43,7 @@ MODEL_KEY = os.environ.get("BER_MODEL", "multilingual-e5-small")
 OUT_DIR = Path(os.environ.get("BER_OUT", "output"))
 LAM_NULL = float(os.environ.get("BER_LAM_NULL", "1.0"))
 TRAIN_MODEL = os.environ.get("BER_TRAIN_MODEL", "1") == "1"
+SPLIT_DIR = os.environ.get("BER_SPLIT_DIR", "")
 MODEL_DIR = Path(os.environ.get("BER_MODEL_DIR", "models"))
 SEED = 42
 
@@ -56,13 +57,23 @@ def show(title, obj):
 def main():
     # Only the split being run has to exist: a partial upload should not block
     # training, which needs train/ alone.
-    root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
-    if root is None:
-        raise SystemExit(f"no dataset/{SPLIT} under {DATA_ROOT}")
+    if SPLIT_DIR:
+        data_dir_override = Path(SPLIT_DIR)
+        root = data_dir_override.parent
+        if not data_dir_override.is_dir():
+            raise SystemExit(f"BER_SPLIT_DIR does not exist: {data_dir_override}")
+    else:
+        data_dir_override = None
+        root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
+        if root is None:
+            raise SystemExit(
+                f"no dataset/{SPLIT} under {DATA_ROOT}. If the splits are in "
+                "separate dataset mounts, set BER_SPLIT_DIR to the split dir."
+            )
     if not (root / "test").is_dir():
         print(f"NOTE: {root/'test'} is absent, so this run cannot produce a "
               "submission -- training only.")
-    data_dir = root / SPLIT
+    data_dir = data_dir_override or (root / SPLIT)
     print(f"split: {data_dir}")
 
     frames, reports = run_audit.load_dataset(data_dir)

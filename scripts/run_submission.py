@@ -33,6 +33,7 @@ DATA_ROOT = os.environ.get(
     "/content/drive/MyDrive/6ab10eb3b23ba_student_resource/student_resource/dataset",
 )
 SPLIT = os.environ.get("BER_SPLIT", "test")
+SPLIT_DIR = os.environ.get("BER_SPLIT_DIR", "")
 K = int(os.environ.get("BER_K", "15"))
 FRAG_CHUNK = int(os.environ.get("BER_FRAG_CHUNK", "500000"))
 MODEL_DIR = Path(os.environ.get("BER_MODEL_DIR", "models"))
@@ -43,19 +44,37 @@ MODEL_KEY = os.environ.get("BER_MODEL", "multilingual-e5-small")
 LAM_NULL = float(os.environ.get("BER_LAM_NULL", "1.0"))
 
 
+def _find_test_s1(data_dir):
+    """The test S1 file, whatever prefix it carries."""
+    for pattern in ("test_source1.tsv", "*source1*.tsv"):
+        hits = sorted(Path(data_dir).glob(pattern))
+        if hits:
+            return hits[0]
+    raise SystemExit(f"no source1 TSV in {data_dir}")
+
+
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 def main():
-    root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
-    if root is None:
-        raise SystemExit(
-            f"no dataset/{SPLIT} under {DATA_ROOT}. A submission needs the test "
-            "split: every one of the test S1 rows must appear in the output "
-            "(io_rules.md 5.1)."
-        )
-    data_dir = root / SPLIT
+    # SPLIT_DIR points straight at a split directory, for the case where the
+    # splits live in separate dataset mounts rather than under one root.
+    if SPLIT_DIR:
+        data_dir = Path(SPLIT_DIR)
+        root = data_dir.parent
+        if not data_dir.is_dir():
+            raise SystemExit(f"BER_SPLIT_DIR does not exist: {data_dir}")
+    else:
+        root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
+        if root is None:
+            raise SystemExit(
+                f"no dataset/{SPLIT} under {DATA_ROOT}. A submission needs the "
+                "test split: every one of the test S1 rows must appear in the "
+                "output (io_rules.md 5.1). If the splits are in separate "
+                "dataset mounts, set BER_SPLIT_DIR to the test directory."
+            )
+        data_dir = root / SPLIT
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
 
     model = matcher.load_scorer(MODEL_DIR / "pair_scorer.pkl")
@@ -132,15 +151,16 @@ def main():
     report = submission.validate(
         m_path, c_path, s1_ids=s1_ids,
         fragment_ids=set(frags_all["entity_id"]),
-        test_s1_path=data_dir / f"{SPLIT}_source1.tsv", is_submission=True)
+        test_s1_path=_find_test_s1(data_dir), is_submission=True)
     print(json.dumps({"ok": report.ok, "n_rows": report.n_rows,
                       "n_predicted_ids": report.n_predicted_ids,
                       "problems": report.problems[:10]}, indent=2))
 
-    official = root.parent / "utils" / "validate_submission.py"
+    official = Path(os.environ.get(
+        "BER_VALIDATOR", root.parent / "utils" / "validate_submission.py"))
     if official.exists():
         ok, output = submission.run_official_validator(
-            official, m_path, c_path, root / "test")
+            official, m_path, c_path, data_dir)
         print(f"\norganiser validator: {'PASS' if ok else 'FAIL'}")
         print(output[:3000])
     return 0 if report.ok else 1
