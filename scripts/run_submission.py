@@ -48,9 +48,13 @@ def log(msg):
 
 
 def main():
-    root = run_audit.find_dataset_root(DATA_ROOT)
+    root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
     if root is None:
-        raise SystemExit(f"no dataset under {DATA_ROOT}")
+        raise SystemExit(
+            f"no dataset/{SPLIT} under {DATA_ROOT}. A submission needs the test "
+            "split: every one of the test S1 rows must appear in the output "
+            "(io_rules.md 5.1)."
+        )
     data_dir = root / SPLIT
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -52,11 +52,16 @@ def load_dataset(data_dir):
     return frames, reports
 
 
-def find_dataset_root(*hints):
+def find_dataset_root(*hints, require=("train", "test")):
     """Locate the organiser's dataset dir (the one containing train/ and test/).
 
     Accepts either the student_resource root or the dataset dir itself. Returns
     None when nothing matches, so callers can fall back to proxy data.
+
+    `require` names the splits that must be present. It defaults to both, but a
+    partial upload -- train present, test still uploading -- is a normal state
+    to work in: model training needs only train/, so requiring both would block
+    hours of usable work on a file transfer.
     """
     candidates = []
     for hint in hints:
@@ -65,7 +70,7 @@ def find_dataset_root(*hints):
         base = Path(hint)
         candidates += [base, base / "dataset", base / "student_resource" / "dataset"]
     for base in candidates:
-        if (base / "train").is_dir() and (base / "test").is_dir():
+        if all((base / split).is_dir() for split in require):
             return base
     return None
 

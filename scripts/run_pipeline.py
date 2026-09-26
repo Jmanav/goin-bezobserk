@@ -54,9 +54,14 @@ def show(title, obj):
 
 
 def main():
-    root = run_audit.find_dataset_root(DATA_ROOT)
+    # Only the split being run has to exist: a partial upload should not block
+    # training, which needs train/ alone.
+    root = run_audit.find_dataset_root(DATA_ROOT, require=(SPLIT,))
     if root is None:
-        raise SystemExit(f"no dataset/train+test under {DATA_ROOT}")
+        raise SystemExit(f"no dataset/{SPLIT} under {DATA_ROOT}")
+    if not (root / "test").is_dir():
+        print(f"NOTE: {root/'test'} is absent, so this run cannot produce a "
+              "submission -- training only.")
     data_dir = root / SPLIT
     print(f"split: {data_dir}")
 
